@@ -9,8 +9,10 @@ import fsCopyFolder from 'wsemi/src/fsCopyFolder.mjs'
 import puppeteer from 'puppeteer'
 
 
-//node_modules/puppeteer/.local-chromium/win64-884014
+//自動複製chromium, node_modules/puppeteer/.local-chromium/win64-884014
 fsCopyFolder('./node_modules/puppeteer/.local-chromium', './chromium')
+
+//提供給網頁用的highcharts程式碼
 let code_highcharts = fs.readFileSync('./node_modules/highcharts/highcharts.js', 'utf8')
 let code_stock = fs.readFileSync('./node_modules/highcharts/modules/stock.js', 'utf8')
 let code_heatmap = fs.readFileSync('./node_modules/highcharts/modules/heatmap.js', 'utf8')
