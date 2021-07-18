@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>WHc2pngServer.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="WHc2png.html">WHc2png</a></li><li><a href="WHc2pngServer.html">WHc2pngServer</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">WHc2pngServer.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import Hapi from '@hapi/hapi'
+import json from 'json5'
+import get from 'lodash/get'
+import isint from 'wsemi/src/isint.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import cint from 'wsemi/src/cint.mjs'
+import cstr from 'wsemi/src/cstr.mjs'
+import genPm from 'wsemi/src/genPm.mjs'
+import wh from './WHc2png.mjs'
+
+
+/**
+ * 提供Highcharts設定檔(含數據)轉png圖服務
+ *
+ * @class
+ * @param {Object} [opt={}] 輸入設定物件，預設{}
+ * @param {Integer} [opt.port=8080] 輸入Hapi伺服器所在port，預設8080
+ * @param {String} [opt.apiName='api'] 輸入http API伺服器網址的api名稱，預設'api'
+ * @returns {Object} 回傳通訊物件，可監聽事件open、error、clientChange、execute、broadcast、deliver，可使用函數broadcast
+ * @example
+ *
+ * import WHc2pngServer from 'w-hc2png'
+ *
+ * let opt = {
+ *     port: 9020,
+ *     apiName: 'api',
+ * }
+ * WHc2pngServer(opt)
+ *
+ */
+function WHc2pngServer(opt) {
+
+    //port
+    let port = get(opt, 'port')
+    if (!isint(port)) {
+        port = 8080
+    }
+    port = cint(port)
+    port = Math.max(port, 0)
+
+    //apiName
+    let apiName = get(opt, 'apiName')
+    if (!isestr(apiName)) {
+        apiName = 'api'
+    }
+    apiName = cstr(apiName)
+
+    //api
+    let api = {
+        path: '/' + apiName,
+        method: 'POST',
+        options: {
+            payload: {
+                maxBytes: 1000 * 1024 * 1024, //1g
+                timeout: 3 * 60 * 1000, //3分鐘, 注意payload timeout必須小於socket timeout
+                multipart: true, //hapi 19之後修改multipart預設值為false
+            },
+            timeout: {
+                socket: 5 * 60 * 1000, //5分鐘
+            },
+        },
+        handler: function (req, res) {
+            let pm = genPm()
+            let r = null
+
+            try {
+
+                //data
+                let data = req.payload
+                // console.log('req', req)
+                // console.log('data', data)
+
+                //width = 700, height = 400, scale = 3, highchartsOptions
+                let width = get(data, 'width', null)
+                let height = get(data, 'height', null)
+                let scale = get(data, 'scale', null)
+                let opt = get(data, 'opt', '')
+                if (isestr(opt)) {
+                    opt = json.parse(opt) //傳入是string得轉回object
+                }
+                // console.log('opt', opt)
+
+                //wh
+                wh(width, height, scale, opt)
+                    .then((b64) => {
+                    // console.log('then', b64)
+                        b64 = `data:image/png;base64, ${b64}`
+                        // b64 = `&lt;img src="${b64}">`
+                        // r = b64
+                        r = JSON.stringify({ b64 })
+                    })
+                    .catch((err) => {
+                        console.log('w-hc2png catch', err)
+                        r = JSON.stringify({ err })
+                    })
+                    .finally(() => {
+                        pm.resolve(r)
+                    })
+
+            }
+            catch (err) {
+                console.log('handler catch', err)
+                r = JSON.stringify({ err: err.toString() })
+                pm.resolve(r)
+            }
+
+            return pm
+        },
+    }
+
+    function startServer() {
+
+        //server
+        let server = Hapi.server({
+            port,
+            //host: 'localhost',
+            routes: {
+                cors: true
+            },
+        })
+
+        //route api
+        server.route(api)
+
+        //start
+        server.start()
+
+        console.log(`Server running at: ${server.info.uri}`)
+    }
+
+    //startServer
+    startServer()
+
+}
+
+
+export default WHc2pngServer
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.6.7</a> on Sun Jul 18 2021 11:44:57 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

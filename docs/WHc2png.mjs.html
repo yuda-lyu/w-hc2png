@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>WHc2png.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="WHc2png.html">WHc2png</a></li><li><a href="WHc2pngServer.html">WHc2pngServer</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">WHc2png.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+import set from 'lodash/set'
+import isnum from 'wsemi/src/isnum.mjs'
+import cdbl from 'wsemi/src/cdbl.mjs'
+import now2strp from 'wsemi/src/now2strp.mjs'
+import genID from 'wsemi/src/genID.mjs'
+import fsCopyFolder from 'wsemi/src/fsCopyFolder.mjs'
+import puppeteer from 'puppeteer'
+
+
+//node_modules/puppeteer/.local-chromium/win64-884014
+fsCopyFolder('./node_modules/puppeteer/.local-chromium', './chromium')
+let code_highcharts = fs.readFileSync('./node_modules/highcharts/highcharts.js', 'utf8')
+let code_stock = fs.readFileSync('./node_modules/highcharts/modules/stock.js', 'utf8')
+let code_heatmap = fs.readFileSync('./node_modules/highcharts/modules/heatmap.js', 'utf8')
+let code_annotations = fs.readFileSync('./node_modules/highcharts/modules/annotations.js', 'utf8')
+let code_boost = fs.readFileSync('./node_modules/highcharts/modules/boost.js', 'utf8')
+let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost-canvas.js', 'utf8')
+
+
+/**
+ * 轉Highcharts設定檔(含數據)為png圖
+ *
+ * @class
+ * @param {Number} [width=700] 輸入圖片原始寬度數字，單位px，預設700
+ * @param {Number} [height=400] 輸入圖片原始高度數字，單位px，預設400
+ * @param {Number} [scale=3] 輸入欲將圖片放大比例數字，單位px，預設3
+ * @param {Object} [highchartsOptions={}] 輸入Highcharts設定物件，預設{}
+ * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
+ * @example
+ *
+ * async function test1() {
+ *
+ *     let st = {
+ *         width: 500,
+ *         height: 400,
+ *         scale: 3,
+ *         opt: {
+ *
+ *             title: {
+ *                 text: 'Logarithmic axis demo'
+ *             },
+ *
+ *             xAxis: {
+ *                 tickInterval: 1,
+ *                 type: 'logarithmic',
+ *                 accessibility: {
+ *                     rangeDescription: 'Range: 1 to 10'
+ *                 }
+ *             },
+ *
+ *             yAxis: {
+ *                 type: 'logarithmic',
+ *                 minorTickInterval: 0.1,
+ *                 accessibility: {
+ *                     rangeDescription: 'Range: 0.1 to 1000'
+ *                 }
+ *             },
+ *
+ *             tooltip: {
+ *                 headerFormat: '&lt;b>{series.name}&lt;/b>&lt;br />',
+ *                 pointFormat: 'x = {point.x}, y = {point.y}'
+ *             },
+ *
+ *             series: [{
+ *                 data: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+ *                 pointStart: 1
+ *             }]
+ *
+ *         }
+ *     }
+ *     let b64 = await WHc2png(st.width, st.height, st.scale, st.opt)
+ *     console.log('test1', b64)
+ *
+ *     // fs.writeFileSync('test1.b64',b64)
+ *
+ * }
+ * test1()
+ *
+ */
+async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions = {}) {
+    // console.log('WHc2png', width, height, scale, highchartsOptions)
+
+    //width
+    if (!isnum(width)) {
+        return Promise.reject('width is not number')
+    }
+    width = cdbl(width)
+    if (width &lt;= 0) {
+        return Promise.reject('width &lt;= 0')
+    }
+
+    //height
+    if (!isnum(height)) {
+        return Promise.reject('height is not number')
+    }
+    height = cdbl(height)
+    if (height &lt;= 0) {
+        return Promise.reject('height &lt;= 0')
+    }
+
+    //scale
+    if (!isnum(scale)) {
+        return Promise.reject('scale is not number')
+    }
+    scale = cdbl(scale)
+    if (scale &lt;= 0) {
+        return Promise.reject('scale &lt;= 0')
+    }
+
+    //highchartsOptions, 強制關閉動畫避免過慢顯示無法截到數據圖
+    set(highchartsOptions, 'chart.animation', false)
+    set(highchartsOptions, 'plotOptions.series.animation', false)
+    // console.log('highchartsOptions', highchartsOptions)
+
+    //fpOut
+    let fpOut = `${now2strp()}-${genID()}.png` //一定要給副檔名, 否則puppeteer的screenshot會無法識別格式
+
+    //chromiumExecutablePath
+    let executablePath = puppeteer.executablePath()
+    let ss = executablePath.split('.local-chromium')
+    let chromiumExecutablePath = path.resolve() + path.sep + 'chromium' + ss[1]
+    // console.log('chromiumExecutablePath', chromiumExecutablePath)
+
+    //cHighchartsOptions
+    let cHighchartsOptions = JSON.stringify(highchartsOptions)
+    // console.log('cHighchartsOptions', cHighchartsOptions)
+
+    //fnHtml
+    let fnHtml = './hc2png.html'
+
+    //html
+    let g = `
+&lt;!DOCTYPE html>
+&lt;html>
+&lt;head>
+  &lt;meta charset="UTF-8">
+  &lt;title>highcharts to png&lt;/title>
+
+  &lt;script>{code_highcharts}&lt;/script>
+  &lt;script>{code_stock}&lt;/script>
+  &lt;script>{code_heatmap}&lt;/script>
+  &lt;script>{code_annotations}&lt;/script>
+  &lt;script>{code_boost}&lt;/script>
+  &lt;script>{code_boost_canvas}&lt;/script>
+
+&lt;/head>
+&lt;body style="padding:0; margin:0;">
+
+  &lt;div id="hc" style="width:{width}px; height:{height}px;">&lt;/div>
+
+  &lt;script>
+      
+      let opt={opt}
+
+      let chart = Highcharts.chart('hc', opt)
+
+  &lt;/script>
+
+&lt;/body>
+&lt;/html>
+`
+    g = g.replace('{opt}', cHighchartsOptions)
+    g = g.replace('{width}', width)
+    g = g.replace('{height}', height)
+    g = g.replace('{code_highcharts}', code_highcharts)
+    g = g.replace('{code_stock}', code_stock)
+    g = g.replace('{code_heatmap}', code_heatmap)
+    g = g.replace('{code_annotations}', code_annotations)
+    g = g.replace('{code_boost}', code_boost)
+    g = g.replace('{code_boost_canvas}', code_boost_canvas)
+
+
+    fs.writeFileSync(fnHtml, g, 'utf8')
+
+    //wd
+    let wd = process.cwd() + '\\'
+
+    //url
+    let url = wd + fnHtml
+
+    //opt
+    let opt = {
+        executablePath: chromiumExecutablePath,
+        headless: true,
+        slowMo: 20,
+    }
+
+    //browser
+    let browser = await puppeteer.launch(opt)
+
+    //page
+    let page = await browser.newPage()
+
+    //viewport
+    let viewport = {
+        x: 0,
+        y: 0,
+        width: Number(width),
+        height: Number(height),
+        deviceScaleFactor: Number(scale),
+    }
+    //console.log('viewport',viewport)
+
+    //show page
+    await page.goto(url)
+    await page.setViewport(viewport)
+
+    // //delay 3s for highchart rendered
+    // await page.waitFor(3000)
+
+    //screenshot
+    await page.screenshot({ path: fpOut }) //fullPage: true
+
+    //close
+    // await page.close()
+    await browser.close()
+
+    //delete
+    fs.unlinkSync(fnHtml)
+
+    //read
+    let b64 = fs.readFileSync(fpOut, { encoding: 'base64' })
+
+    //delete
+    fs.unlinkSync(fpOut)
+
+    return b64
+}
+
+
+export default WHc2png
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.6.7</a> on Sun Jul 18 2021 11:44:57 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
