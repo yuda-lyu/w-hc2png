@@ -20,6 +20,10 @@ let code_annotations = fs.readFileSync('./node_modules/highcharts/modules/annota
 let code_boost = fs.readFileSync('./node_modules/highcharts/modules/boost.js', 'utf8')
 let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost-canvas.js', 'utf8')
 
+//wd
+let wd = process.cwd()
+console.log('process.cwd()', wd)
+
 
 /**
  * 轉Highcharts設定檔(含數據)為png圖
@@ -116,8 +120,19 @@ async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions =
     set(highchartsOptions, 'plotOptions.series.animation', false)
     // console.log('highchartsOptions', highchartsOptions)
 
+    //fnOut
+    let fnOut = `./whpic-${now2strp()}-${genID()}.png` //一定要給副檔名, 否則puppeteer的screenshot會無法識別格式
+
     //fpOut
-    let fpOut = `${now2strp()}-${genID()}.png` //一定要給副檔名, 否則puppeteer的screenshot會無法識別格式
+    let fpOut = path.resolve(wd, fnOut)
+    // console.log('fpOut', fpOut)
+
+    //fnHtml
+    let fnHtml = `./whweb-${now2strp()}-${genID()}.html`
+
+    //fpHtml
+    let fpHtml = path.resolve(wd, fnHtml)
+    // console.log('fpHtml', fpHtml)
 
     //chromiumExecutablePath
     let executablePath = puppeteer.executablePath()
@@ -128,9 +143,6 @@ async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions =
     //cHighchartsOptions
     let cHighchartsOptions = JSON.stringify(highchartsOptions)
     // console.log('cHighchartsOptions', cHighchartsOptions)
-
-    //fnHtml
-    let fnHtml = './hc2png.html'
 
     //html
     let g = `
@@ -173,14 +185,8 @@ async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions =
     g = g.replace('{code_boost}', code_boost)
     g = g.replace('{code_boost_canvas}', code_boost_canvas)
 
-
-    fs.writeFileSync(fnHtml, g, 'utf8')
-
-    //wd
-    let wd = process.cwd() + '\\'
-
-    //url
-    let url = wd + fnHtml
+    //writeFileSync
+    fs.writeFileSync(fpHtml, g, 'utf8')
 
     //opt
     let opt = {
@@ -206,7 +212,7 @@ async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions =
     //console.log('viewport',viewport)
 
     //show page
-    await page.goto(url)
+    await page.goto(fpHtml)
     await page.setViewport(viewport)
 
     // //delay 3s for highchart rendered
@@ -220,7 +226,7 @@ async function WHc2png(width = 700, height = 400, scale = 3, highchartsOptions =
     await browser.close()
 
     //delete
-    fs.unlinkSync(fnHtml)
+    fs.unlinkSync(fpHtml)
 
     //read
     let b64 = fs.readFileSync(fpOut, { encoding: 'base64' })
