@@ -21,6 +21,8 @@ async function rp() {
             'puppeteer': 'puppeteer',
         },
         external: [
+            'fs',
+            'path',
             'puppeteer',
         ],
     })

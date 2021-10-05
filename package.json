@@ -1,6 +1,6 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A package for Highcharts to png.",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
