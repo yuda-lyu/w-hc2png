@@ -66,21 +66,21 @@ async function test1() {
 }
 test1()
 
-async function test2() {
+// async function test2() {
 
-    let st = {
-        width: 190,
-        height: 560,
-        scale: 1,
-        opt: JSON.parse(_.trim(fs.readFileSync('./opt (9).json', 'utf8'))),
-    }
-    let b64 = await WHc2png(st.width, st.height, st.scale, st.opt)
-    // console.log('test2', b64)
+//     let st = {
+//         width: 190,
+//         height: 560,
+//         scale: 1,
+//         opt: JSON.parse(_.trim(fs.readFileSync('./opt (9).json', 'utf8'))),
+//     }
+//     let b64 = await WHc2png(st.width, st.height, st.scale, st.opt)
+//     // console.log('test2', b64)
 
-    genPlotHtml('./test2.html', b64)
+//     genPlotHtml('./test2.html', b64)
 
-}
-test2()
+// }
+// test2()
 
 
 //node --experimental-modules --es-module-specifier-resolution=node scla.mjs
