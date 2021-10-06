@@ -3,7 +3,6 @@ A package for Highcharts to png.
 
 ![language](https://img.shields.io/badge/language-JavaScript-orange.svg) 
 [![npm version](http://img.shields.io/npm/v/w-hc2png.svg?style=flat)](https://npmjs.org/package/w-hc2png) 
-[![Build Status](https://travis-ci.org/yuda-lyu/w-hc2png.svg?branch=master)](https://travis-ci.org/yuda-lyu/w-hc2png) 
 [![license](https://img.shields.io/npm/l/w-hc2png.svg?style=flat)](https://npmjs.org/package/w-hc2png) 
 [![gzip file size](http://img.badgesize.io/yuda-lyu/w-hc2png/master/dist/w-hc2png.umd.js.svg?compression=gzip)](https://github.com/yuda-lyu/w-hc2png)
 [![npm download](https://img.shields.io/npm/dt/w-hc2png.svg)](https://npmjs.org/package/w-hc2png) 
