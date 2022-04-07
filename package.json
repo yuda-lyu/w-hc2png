@@ -1,18 +1,18 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A package for Highcharts to png.",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^20.2.1",
     "highcharts": "^9.3.2",
-    "json5": "^2.2.0",
+    "json5": "^2.2.1",
     "lodash": "^4.17.21",
-    "puppeteer": "^10.4.0",
-    "wsemi": "^1.6.34"
+    "puppeteer": "^13.5.2",
+    "wsemi": "^1.6.54"
   },
   "devDependencies": {
-    "w-package-tools": "^1.0.59"
+    "w-package-tools": "^1.0.65"
   },
   "scripts": {
     "test": "mocha --parallel --timeout 60000 --experimental-modules --es-module-specifier-resolution=node",
