@@ -16,7 +16,6 @@ function main() {
 
     //url
     let url = `https://cdn.jsdelivr.net/npm/w-hc2png@${pks.version}/dist/w-hc2png.umd.js`
-    let urlww = `https://cdn.jsdelivr.net/npm/w-hc2png@${pks.version}/dist/w-hc2png.wk.umd.js`
 
     //mkdirSync
     if (!fs.existsSync(fdTar)) {
@@ -38,8 +37,6 @@ function main() {
         let r
         r = `../dist/w-hc2png.umd.js`
         c = c.replace(r, url)
-        r = `../dist/w-hc2png.wk.umd.js`
-        c = c.replace(r, urlww)
 
         //write
         //console.log(c)
