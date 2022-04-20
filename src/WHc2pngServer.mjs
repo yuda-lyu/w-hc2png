@@ -1,15 +1,15 @@
 import Hapi from '@hapi/hapi'
-import json from 'json5'
+import JSON5 from 'json5'
 import get from 'lodash/get'
 import isint from 'wsemi/src/isint.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
-import ispm from 'wsemi/src/ispm.mjs'
+// import ispm from 'wsemi/src/ispm.mjs'
 import cint from 'wsemi/src/cint.mjs'
 import cstr from 'wsemi/src/cstr.mjs'
-import haskey from 'wsemi/src/haskey.mjs'
+// import haskey from 'wsemi/src/haskey.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
-import wh from './WHc2png.mjs'
+import WHc2png from './WHc2png.mjs'
 
 
 /**
@@ -84,44 +84,16 @@ function WHc2pngServer(opt) {
                 let height = get(data, 'height', null)
                 let scale = get(data, 'scale', null)
                 let opt = get(data, 'opt', null)
+                let whOpt = get(data, 'whOpt', null)
                 // console.log('opt', opt)
 
-                //若傳入opt是string得轉回object
-                if (isestr(opt)) {
-                    opt = json.parse(opt)
+                //若傳入whOpt是string得轉回object
+                if (isestr(whOpt)) {
+                    whOpt = JSON5.parse(whOpt)
                 }
 
-                //plotFun, plotInput
-                let plotFun = get(opt, 'plotFun', null)
-                let plotInput = get(opt, 'plotInput', null)
-
-                //若opt有指定分析函數plotFun, 則改用呼叫plotFun取得opt
-                if (isestr(plotFun)) {
-                    // console.log('有指定分析函數plotFun',plotFun)
-
-                    //kpPlotfun
-                    if (haskey(kpPlotfun, plotFun)) {
-
-                        //fun
-                        let fun = kpPlotfun[plotFun]
-
-                        //opt, call fun
-                        opt = fun(plotInput)
-                        if (ispm(opt)) {
-                            opt = await opt
-                        }
-                        console.log('opt', opt)
-
-                    }
-                    else {
-                        return Promise.reject(`invalid plotFun[${plotFun}] in kpPlotfun`)
-                    }
-
-                }
-                // console.log('opt', opt)
-
-                //wh
-                let b64 = await wh(width, height, scale, opt)
+                //WHc2png
+                let b64 = await WHc2png(width, height, scale, opt, whOpt)
 
                 //r
                 b64 = `data:image/png;base64, ${b64}`

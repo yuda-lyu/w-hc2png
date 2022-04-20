@@ -23,6 +23,11 @@ async function test() {
     let width = 500
     let height = 400
     let scale = 3
+    let cOpt = `
+    let ds = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    for (let i = 0; i < ds.length; i++) {
+        ds[i] = Math.sin(ds[i]/360*Math.PI)
+    }
     let opt = {
 
         title: {
@@ -51,20 +56,24 @@ async function test() {
         },
 
         series: [{
-            data: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+            data: ds,
             pointStart: 1
         }]
 
     }
-    let b64 = await WHc2png(width, height, scale, opt)
+    window.opt = opt
+    `
+    let whOpt = { useWindowOpt: true }
+
+    let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
     // console.log('test', b64)
 
     // fs.writeFileSync('./test.b64', b64)
-    genPlotHtml('./test-scla.html', b64)
+    genPlotHtml('./test-sclb.html', b64)
 
     console.log('finish')
 }
 test()
 
 
-//node --experimental-modules --es-module-specifier-resolution=node scla.mjs
+//node --experimental-modules --es-module-specifier-resolution=node sclb.mjs
