@@ -1,17 +1,17 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
-    "@hapi/hapi": "^20.2.1",
-    "highcharts": "^10.0.0",
-    "json5": "^2.2.1",
+    "@hapi/hapi": "^21.2.0",
+    "highcharts": "^10.3.2",
+    "json5": "^2.2.3",
     "lodash": "^4.17.21",
-    "puppeteer": "^10.4.0",
-    "wsemi": "^1.6.58"
+    "puppeteer": "^19.5.2",
+    "wsemi": "^1.6.87"
   },
   "devDependencies": {
-    "w-package-tools": "^1.0.65"
+    "w-package-tools": "^1.0.66"
   },
   "scripts": {
     "test": "mocha --parallel --timeout 60000 --experimental-modules --es-module-specifier-resolution=node",
