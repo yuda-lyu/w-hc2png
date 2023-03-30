@@ -7,6 +7,11 @@ describe(`WHc2png`, function() {
 
     async function test1() {
 
+        let ds = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+        for (let i = 0; i < ds.length; i++) {
+            ds[i] = Math.sin(ds[i]/360*Math.PI)
+        }
+
         let st = {
             width: 500,
             height: 400,
@@ -39,23 +44,26 @@ describe(`WHc2png`, function() {
                 },
 
                 series: [{
-                    data: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+                    data: ds,
                     pointStart: 1
                 }]
 
             }
         }
-        let ans = fs.readFileSync('./test1.b64', 'utf8')
+
+        let ans = fs.readFileSync('./test/test.b64', 'utf8')
+
         let ret = await WHc2png(st.width, st.height, st.scale, st.opt)
+
         return {
             ans,
             ret,
         }
     }
     it(`should return (base64) when run test1 `, async function() {
-        let t = test1()
-        let r = t.ret
-        let rr = t.ans
+        let t = await test1()
+        let r = t.ret.length
+        let rr = t.ans.length
         assert.strict.deepStrictEqual(r, rr)
     })
 
