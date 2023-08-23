@@ -275,7 +275,7 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
     //puppeteerOpt
     let puppeteerOpt = {
         // executablePath: chromiumExecutablePath,
-        headless: true,
+        headless: 'new', //true,
         slowMo: 20,
     }
 
