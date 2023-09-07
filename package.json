@@ -1,6 +1,6 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^21.3.2",
@@ -8,7 +8,7 @@
     "json5": "^2.2.3",
     "lodash": "^4.17.21",
     "puppeteer": "^21.1.1",
-    "wsemi": "^1.7.27"
+    "wsemi": "^1.7.34"
   },
   "devDependencies": {
     "w-package-tools": "^1.0.69"

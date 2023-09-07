@@ -11,11 +11,12 @@ import isbol from 'wsemi/src/isbol.mjs'
 import cdbl from 'wsemi/src/cdbl.mjs'
 import now2strp from 'wsemi/src/now2strp.mjs'
 import genID from 'wsemi/src/genID.mjs'
+import fsIsFile from 'wsemi/src/fsIsFile.mjs'
 // import fsCopyFolder from 'wsemi/src/fsCopyFolder.mjs'
 
 
-// //自動複製chromium, node_modules/puppeteer/.local-chromium/win64-884014
-// fsCopyFolder('./node_modules/puppeteer/.local-chromium', './chromium')
+//已不須自動複製chromium, node_modules/puppeteer/.local-chromium/win64-884014
+
 
 //提供給網頁用的highcharts程式碼
 let code_highcharts = fs.readFileSync('./node_modules/highcharts/highcharts.js', 'utf8')
@@ -112,7 +113,7 @@ let wd = process.cwd()
  *
  */
 async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {}) {
-    // console.log('WHc2png', width, height, scale, opt)
+    // console.log('WHc2png', width, height, scale, opt, whOpt)
 
     //width
     if (!isnum(width)) {
@@ -164,6 +165,10 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
         useWindowOpt = false
     }
 
+    //executablePath
+    let executablePath = get(whOpt, 'executablePath', '')
+    //若不給則由puppeteer偵測取得
+
     //cLetOptStart, cLetOptEnd
     let cLetOptStart = 'let _opt='
     let cLetOptEnd = ''
@@ -192,14 +197,6 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
     //fpHtml
     let fpHtml = path.resolve(wd, fnHtml)
     // console.log('fpHtml', fpHtml)
-
-    //chromiumExecutablePath
-    // let executablePath = puppeteer.executablePath()
-    // console.log('executablePath', executablePath)
-    // let ss = executablePath.split('.local-chromium')
-    // let chromiumExecutablePath = path.resolve() + path.sep + 'chromium' + ss[1]
-    // let chromiumExecutablePath = puppeteer.executablePath()
-    // console.log('chromiumExecutablePath', chromiumExecutablePath)
 
     //cAddScripts
     let cAddScripts = ''
@@ -272,51 +269,67 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
     //writeFileSync
     fs.writeFileSync(fpHtml, g, 'utf8')
 
-    //puppeteerOpt
-    let puppeteerOpt = {
-        // executablePath: chromiumExecutablePath,
-        headless: 'new', //true,
-        slowMo: 20,
+    //b64
+    let b64 = ''
+    let core = async () => {
+
+        //puppeteerOpt
+        let puppeteerOpt = {
+            headless: 'new', //true,
+            slowMo: 20,
+        }
+        if (isestr(executablePath)) {
+            puppeteerOpt.executablePath = executablePath
+        }
+
+        //browser
+        let browser = await puppeteer.launch(puppeteerOpt)
+
+        //page
+        let page = await browser.newPage()
+
+        //viewport
+        let viewport = {
+            x: 0,
+            y: 0,
+            width: Number(width),
+            height: Number(height),
+            deviceScaleFactor: Number(scale),
+        }
+        //console.log('viewport',viewport)
+
+        //show page
+        await page.goto(fpHtml)
+        await page.setViewport(viewport)
+
+        // //delay 3s for highchart rendered
+        // await page.waitFor(3000)
+
+        //screenshot
+        await page.screenshot({ path: fpOut }) //fullPage: true
+
+        //close
+        // await page.close()
+        await browser.close()
+
+        //readFileSync
+        b64 = fs.readFileSync(fpOut, { encoding: 'base64' })
+
     }
-
-    //browser
-    let browser = await puppeteer.launch(puppeteerOpt)
-
-    //page
-    let page = await browser.newPage()
-
-    //viewport
-    let viewport = {
-        x: 0,
-        y: 0,
-        width: Number(width),
-        height: Number(height),
-        deviceScaleFactor: Number(scale),
-    }
-    //console.log('viewport',viewport)
-
-    //show page
-    await page.goto(fpHtml)
-    await page.setViewport(viewport)
-
-    // //delay 3s for highchart rendered
-    // await page.waitFor(3000)
-
-    //screenshot
-    await page.screenshot({ path: fpOut }) //fullPage: true
-
-    //close
-    // await page.close()
-    await browser.close()
+    await core()
+        .catch((err) => {
+            console.log(err)
+        })
 
     //delete
-    fs.unlinkSync(fpHtml)
-
-    //read
-    let b64 = fs.readFileSync(fpOut, { encoding: 'base64' })
+    if (fsIsFile(fpHtml)) {
+        fs.unlinkSync(fpHtml)
+    }
 
     //delete
-    fs.unlinkSync(fpOut)
+    if (fsIsFile(fpOut)) {
+        fs.unlinkSync(fpOut)
+    }
 
     return b64
 }
