@@ -18,7 +18,7 @@ function genPlotHtml(fp, b64) {
 }
 
 
-async function test() {
+async function testa() {
 
     let width = 500
     let height = 400
@@ -56,15 +56,18 @@ async function test() {
         }]
 
     }
-    let b64 = await WHc2png(width, height, scale, opt)
-    // console.log('test', b64)
 
-    // fs.writeFileSync('./test.b64', b64)
+    let b64 = await WHc2png(width, height, scale, opt)
+    // console.log('b64', b64)
+
+    fs.writeFileSync('./test-scla.b64', b64)
     genPlotHtml('./test-scla.html', b64)
 
     console.log('finish')
 }
-test()
-
+testa()
+    .catch((err) => {
+        console.log(err)
+    })
 
 //node --experimental-modules --es-module-specifier-resolution=node scla.mjs

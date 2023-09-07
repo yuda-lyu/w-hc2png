@@ -18,7 +18,7 @@ function genPlotHtml(fp, b64) {
 }
 
 
-async function test() {
+async function testb() {
 
     let width = 500
     let height = 400
@@ -66,14 +66,16 @@ async function test() {
     let whOpt = { useWindowOpt: true }
 
     let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
-    // console.log('test', b64)
+    // console.log('b64', b64)
 
-    // fs.writeFileSync('./test.b64', b64)
+    fs.writeFileSync('./test-sclb.b64', b64)
     genPlotHtml('./test-sclb.html', b64)
 
     console.log('finish')
 }
-test()
-
+testb()
+    .catch((err) => {
+        console.log(err)
+    })
 
 //node --experimental-modules --es-module-specifier-resolution=node sclb.mjs

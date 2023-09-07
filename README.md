@@ -21,13 +21,27 @@ npm i w-hc2png
 #### Example for function:
 > **Link:** [[dev source code](https://github.com/yuda-lyu/w-hc2png/blob/master/scla.mjs)]
 ```alias
-import WHc2png from 'w-hc2png/src/WHc2png.mjs'
+import WHc2png from './src/WHc2png.mjs'
 
-let st = {
-    width: 500,
-    height: 400,
-    scale: 3,
-    opt: {
+function genPlotHtml(fp, b64) {
+    let h = `
+<html>
+    <head></head>
+    <body>
+        <img style="border:1px dashed #ddd;" src="data:image/png;base64, {b64}">
+    </body>
+</html>
+    `
+    h = h.replace('{b64}', b64)
+    fs.writeFileSync(fp, h, 'utf8')
+}
+
+async function testa() {
+
+    let width = 500
+    let height = 400
+    let scale = 3
+    let opt = {
 
         title: {
             text: 'Logarithmic axis demo'
@@ -60,9 +74,79 @@ let st = {
         }]
 
     }
+
+    let b64 = await WHc2png(width, height, scale, opt)
+    // console.log('b64', b64)
+
+    fs.writeFileSync('./test-scla.b64', b64)
+    genPlotHtml('./test-scla.html', b64)
+
+    console.log('finish')
 }
-let b64 = await WHc2png(st.width, st.height, st.scale, st.opt)
-console.log('test1', b64)
+testa()
+    .catch((err) => {
+        console.log(err)
+    })
+
+async function testb() {
+
+    let width = 500
+    let height = 400
+    let scale = 3
+    let cOpt = `
+    let ds = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    for (let i = 0; i < ds.length; i++) {
+        ds[i] = Math.sin(ds[i]/360*Math.PI)
+    }
+    let opt = {
+
+        title: {
+            text: 'Logarithmic axis demo'
+        },
+
+        xAxis: {
+            tickInterval: 1,
+            type: 'logarithmic',
+            accessibility: {
+                rangeDescription: 'Range: 1 to 10'
+            }
+        },
+
+        yAxis: {
+            type: 'logarithmic',
+            minorTickInterval: 0.1,
+            accessibility: {
+                rangeDescription: 'Range: 0.1 to 1000'
+            }
+        },
+
+        tooltip: {
+            headerFormat: '<b>{series.name}</b><br />',
+            pointFormat: 'x = {point.x}, y = {point.y}'
+        },
+
+        series: [{
+            data: ds,
+            pointStart: 1
+        }]
+
+    }
+    window.opt = opt
+    `
+    let whOpt = { useWindowOpt: true }
+
+    let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
+    // console.log('b64', b64)
+
+    fs.writeFileSync('./test-sclb.b64', b64)
+    genPlotHtml('./test-sclb.html', b64)
+
+    console.log('finish')
+}
+testb()
+    .catch((err) => {
+        console.log(err)
+    })
 
 ```
 
@@ -77,14 +161,14 @@ let opt = {
 }
 WHc2pngServer(opt)
 
----- Postman ----
+------------------------
 
-post: localhost:9020/api
+[POST] http://localhost:9020/api
 
-with:
-    width: 500
-    height: 400
-    scale: 3
+{
+    width: 500,
+    height: 400,
+    scale: 3,
     opt: {
     
         title: {
@@ -119,4 +203,5 @@ with:
     
     }
 
+}
 ```
