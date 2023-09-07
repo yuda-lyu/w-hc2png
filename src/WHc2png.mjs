@@ -3,6 +3,7 @@ import path from 'path'
 import puppeteer from 'puppeteer'
 import get from 'lodash/get'
 import each from 'lodash/each'
+import find from 'lodash/find'
 import isnum from 'wsemi/src/isnum.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
@@ -11,6 +12,7 @@ import isbol from 'wsemi/src/isbol.mjs'
 import cdbl from 'wsemi/src/cdbl.mjs'
 import now2strp from 'wsemi/src/now2strp.mjs'
 import genID from 'wsemi/src/genID.mjs'
+import fsTreeFolder from 'wsemi/src/fsTreeFolder.mjs'
 import fsIsFile from 'wsemi/src/fsIsFile.mjs'
 // import fsCopyFolder from 'wsemi/src/fsCopyFolder.mjs'
 
@@ -167,7 +169,25 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
 
     //executablePath
     let executablePath = get(whOpt, 'executablePath', '')
-    //若不給則由puppeteer偵測取得
+    //若不給則由puppeteer偵測取得或給executableFolder搜尋取得
+
+    //executableFolder
+    let executableFolder = get(whOpt, 'executableFolder', '')
+    if (isestr(executableFolder) && !isestr(executablePath)) {
+        //executablePath='C:\\Users\\user\\.cache\\puppeteer\\chrome\\win64-116.0.5845.96\\chrome-win64\\chrome.exe'
+        //executableFolder='C:\\Users\\user\\.cache\\puppeteer'
+        let fps = fsTreeFolder(executableFolder, null)
+        let r = find(fps, (v) => {
+            return v.name === 'chrome.exe'
+        })
+        // console.log('r', r)
+        if (iseobj(r)) {
+            executablePath = r.path
+        }
+        else {
+            throw new Error(`can not find chrome.exe in executableFolder[${executableFolder}]`)
+        }
+    }
 
     //cLetOptStart, cLetOptEnd
     let cLetOptStart = 'let _opt='
