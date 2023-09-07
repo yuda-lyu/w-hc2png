@@ -61,9 +61,8 @@ async function testb() {
         }]
 
     }
-    window.opt = opt
     `
-    let whOpt = { useWindowOpt: true }
+    let whOpt = {}
 
     let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
     // console.log('b64', b64)

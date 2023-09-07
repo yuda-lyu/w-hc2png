@@ -104,9 +104,8 @@ describe(`WHc2png`, function() {
             }]
     
         }
-        window.opt = opt
         `
-        let whOpt = { useWindowOpt: true }
+        let whOpt = {}
 
         let ans = fs.readFileSync('./test/test-sclb.b64', 'utf8')
 

@@ -8,7 +8,6 @@ import isnum from 'wsemi/src/isnum.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
-import isbol from 'wsemi/src/isbol.mjs'
 import cdbl from 'wsemi/src/cdbl.mjs'
 import now2strp from 'wsemi/src/now2strp.mjs'
 import genID from 'wsemi/src/genID.mjs'
@@ -44,7 +43,6 @@ let wd = process.cwd()
  * @param {Object} [whOpt={}] 輸入設定物件，預設{}
  * @param {Array} [whOpt.addScripts=[]] 輸入引用js程式碼網址陣列，預設[]
  * @param {String} [whOpt.addCode=''] 輸入插用js程式碼字串，可提供編譯後函數例如getOpt之iife或umd等格式程式碼，預設''
- * @param {Boolean} [whOpt.useWindowOpt=false] 輸入是否Highcharts設定物件由window.opt提供，預設false
  * @param {String} [whOpt.executablePath=''] 輸入puppeteer的executablePath字串，預設''
  * @param {String} [whOpt.executableFolder=''] 輸入不提供executablePath時則提供搜索chrome.exe所在資料夾字串，找到後將自動給予puppeteer的executablePath，預設''
  * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
@@ -159,9 +157,8 @@ let wd = process.cwd()
  *         }]
  *
  *     }
- *     window.opt = opt
  *     `
- *     let whOpt = { useWindowOpt: true }
+ *     let whOpt = {}
  *
  *     let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
  *     // console.log('b64', b64)
@@ -224,12 +221,6 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
         caddCode = ''
     }
 
-    //useWindowOpt
-    let useWindowOpt = get(whOpt, 'useWindowOpt')
-    if (!isbol(useWindowOpt)) {
-        useWindowOpt = false
-    }
-
     //executablePath
     let executablePath = get(whOpt, 'executablePath', '')
     //若不給則由puppeteer偵測取得或給executableFolder搜尋取得
@@ -254,23 +245,12 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
 
     //cOpt
     let cOpt = ''
-    if (true) {
-
-        //ct
-        let ct = opt
-        if (!isestr(opt)) {
-            ct = JSON.stringify(opt)
-        }
-        // console.log('ct', ct)
-
-        //cOpt
-        if (!useWindowOpt) {
-            cOpt = `let _opt=${ct};`
-        }
-        else {
-            cOpt = 'let _opt=window.opt;'
-        }
-
+    if (isestr(opt)) {
+        cOpt = opt //外部給予opt字串時須自行給予let opt=ooo
+    }
+    else {
+        let j = JSON.stringify(opt)
+        cOpt = `let opt=${j};`
     }
 
     //fnOut
@@ -324,12 +304,20 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
 
         {cOpt}
 
-        //opt若為物件時, 強制關閉動畫避免過慢顯示無法截到數據圖
-        _.set(_opt, 'chart.animation', false)
-        _.set(_opt, 'plotOptions.series.animation', false)
-        // console.log('_opt', _opt)
-    
-        Highcharts.chart('hc', _opt)
+        if(_.isObject(opt)){
+
+            //強制關閉動畫避免過慢顯示無法截到數據圖
+            _.set(opt, 'chart.animation', false)
+            _.set(opt, 'plotOptions.series.animation', false)
+            // console.log('opt', opt)
+        
+            //plot
+            Highcharts.chart('hc', opt)
+
+        }
+        else{
+            console.log('invalid opt')
+        }
 
     </script>
 
