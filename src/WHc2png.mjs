@@ -44,6 +44,9 @@ let wd = process.cwd()
  * @param {Object} [whOpt={}] 輸入設定物件，預設{}
  * @param {Array} [whOpt.addScripts=[]] 輸入引用js程式碼網址陣列，預設[]
  * @param {String} [whOpt.addCode=''] 輸入插用js程式碼字串，可提供編譯後函數例如getOpt之iife或umd等格式程式碼，預設''
+ * @param {Boolean} [whOpt.useWindowOpt=false] 輸入是否Highcharts設定物件由window.opt提供，預設false
+ * @param {String} [whOpt.executablePath=''] 輸入puppeteer的executablePath字串，預設''
+ * @param {String} [whOpt.executableFolder=''] 輸入不提供executablePath時則提供搜索chrome.exe所在資料夾字串，找到後將自動給予puppeteer的executablePath，預設''
  * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
  * @example
  *
@@ -189,20 +192,26 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
         }
     }
 
-    //cLetOptStart, cLetOptEnd
-    let cLetOptStart = 'let _opt='
-    let cLetOptEnd = ''
-    if (useWindowOpt) {
-        cLetOptStart = ''
-        cLetOptEnd = 'let _opt=window.opt;'
-    }
-
     //cOpt
-    let cOpt = opt
-    if (iseobj(opt)) {
-        cOpt = JSON.stringify(opt)
+    let cOpt = ''
+    if (true) {
+
+        //ct
+        let ct = opt
+        if (!isestr(opt)) {
+            ct = JSON.stringify(opt)
+        }
+        // console.log('ct', ct)
+
+        //cOpt
+        if (!useWindowOpt) {
+            cOpt = `let _opt=${ct};`
+        }
+        else {
+            cOpt = 'let _opt=window.opt;'
+        }
+
     }
-    // console.log('cOpt', cOpt)
 
     //fnOut
     let fnOut = `./whpic-${now2strp()}-${genID()}.png` //一定要給副檔名, 否則puppeteer的screenshot會無法識別格式
@@ -253,8 +262,7 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
 
     <script>
 
-        {cLetOptStart}{cOpt}
-        {cLetOptEnd}
+        {cOpt}
 
         //opt若為物件時, 強制關閉動畫避免過慢顯示無法截到數據圖
         _.set(_opt, 'chart.animation', false)
@@ -272,8 +280,6 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
     //客製化程式得先取代, 避免取代到外部引入程式碼
     g = g.replace('{width}', width)
     g = g.replace('{height}', height)
-    g = g.replace('{cLetOptStart}', cLetOptStart)
-    g = g.replace('{cLetOptEnd}', cLetOptEnd)
     g = g.replace('{cOpt}', cOpt)
 
     //引入外部程式碼
