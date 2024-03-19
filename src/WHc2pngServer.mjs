@@ -1,6 +1,6 @@
 import Hapi from '@hapi/hapi'
 import JSON5 from 'json5'
-import get from 'lodash/get'
+import get from 'lodash-es/get'
 import isint from 'wsemi/src/isint.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'

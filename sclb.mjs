@@ -1,5 +1,5 @@
 import fs from 'fs'
-// import _ from 'lodash'
+// import _ from 'lodash-es'
 // import w from 'wsemi'
 import WHc2png from './src/WHc2png.mjs'
 
