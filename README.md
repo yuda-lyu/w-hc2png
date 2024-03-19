@@ -6,6 +6,7 @@ A package for Highcharts to png.
 [![license](https://img.shields.io/npm/l/w-hc2png.svg?style=flat)](https://npmjs.org/package/w-hc2png) 
 [![gzip file size](http://img.badgesize.io/yuda-lyu/w-hc2png/master/dist/w-hc2png.umd.js.svg?compression=gzip)](https://github.com/yuda-lyu/w-hc2png)
 [![npm download](https://img.shields.io/npm/dt/w-hc2png.svg)](https://npmjs.org/package/w-hc2png) 
+[![npm download](https://img.shields.io/npm/dm/w-hc2png.svg)](https://npmjs.org/package/w-hc2png) 
 [![jsdelivr download](https://img.shields.io/jsdelivr/npm/hm/w-hc2png.svg)](https://www.jsdelivr.com/package/npm/w-hc2png)
 
 ## Documentation
