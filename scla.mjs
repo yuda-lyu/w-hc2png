@@ -70,4 +70,4 @@ testa()
         console.log(err)
     })
 
-//node --experimental-modules --es-module-specifier-resolution=node scla.mjs
+//node --experimental-modules scla.mjs
