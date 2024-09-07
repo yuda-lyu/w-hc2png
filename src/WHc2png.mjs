@@ -17,7 +17,7 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
 
 
 /**
- * 呼叫Chromium轉轉Highcharts設定檔(含數據)為png圖
+ * 呼叫Chromium轉Highcharts設定檔(含數據)為png圖
  *
  * @class
  * @param {Number} [width=700] 輸入圖片原始寬度數字，單位px，預設700
