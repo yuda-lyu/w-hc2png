@@ -9,9 +9,10 @@ import WHtml2png from 'w-html2png/src/WHtml2png.mjs'
 
 //提供給網頁用的highcharts程式碼
 let code_highcharts = fs.readFileSync('./node_modules/highcharts/highcharts.js', 'utf8')
+let code_highcharts_more = fs.readFileSync('./node_modules/highcharts/highcharts-more.js', 'utf8')
 let code_stock = fs.readFileSync('./node_modules/highcharts/modules/stock.js', 'utf8')
-let code_heatmap = fs.readFileSync('./node_modules/highcharts/modules/heatmap.js', 'utf8')
 let code_annotations = fs.readFileSync('./node_modules/highcharts/modules/annotations.js', 'utf8')
+let code_heatmap = fs.readFileSync('./node_modules/highcharts/modules/heatmap.js', 'utf8')
 let code_boost = fs.readFileSync('./node_modules/highcharts/modules/boost.js', 'utf8')
 let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost-canvas.js', 'utf8')
 
@@ -197,9 +198,10 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
     //execJsHead
     let execJsHead = [
         code_highcharts,
+        code_highcharts_more,
         code_stock,
-        code_heatmap,
         code_annotations,
+        code_heatmap,
         code_boost,
         code_boost_canvas,
     ]

@@ -1,6 +1,6 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^21.3.12",
