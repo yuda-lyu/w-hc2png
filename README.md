@@ -13,7 +13,6 @@ To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-
 
 ## Installation
 ### Using npm(ES6 module):
-> **Note:** w-hc2png is mainly dependent on `puppeteer`, `json5` and `@hapi/hapi`.
 ```alias
 npm i w-hc2png
 ```

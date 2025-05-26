@@ -77,4 +77,4 @@ testb()
         console.log(err)
     })
 
-//node --experimental-modules sclb.mjs
+//node sclb.mjs

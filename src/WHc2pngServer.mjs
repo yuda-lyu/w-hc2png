@@ -19,7 +19,6 @@ import WHc2png from './WHc2png.mjs'
  * @param {Object} [opt={}] 輸入設定物件，預設{}
  * @param {Integer} [opt.port=8080] 輸入Hapi伺服器所在port，預設8080
  * @param {String} [opt.apiName='api'] 輸入http API伺服器網址的api名稱，預設'api'
- * @returns {Object} 回傳通訊物件，可監聽事件open、error、clientChange、execute、broadcast、deliver，可使用函數broadcast
  * @example
  *
  * import WHc2pngServer from 'w-hc2png'

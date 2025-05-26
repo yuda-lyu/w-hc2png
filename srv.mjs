@@ -52,4 +52,4 @@ let test = `
 }
 `
 
-//node --experimental-modules srv.mjs
+//node srv.mjs

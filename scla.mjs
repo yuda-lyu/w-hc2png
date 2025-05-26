@@ -70,4 +70,4 @@ testa()
         console.log(err)
     })
 
-//node --experimental-modules scla.mjs
+//node scla.mjs
