@@ -123,8 +123,8 @@ describe(`WHc2png`, function() {
         let rt = null
         if (isWindows()) {
             let t = await testa()
-            rr = t.ret.length
-            rt = t.ans.length
+            rr = t.ret
+            rt = t.ans
         }
         else {
             rr = 1
@@ -138,8 +138,8 @@ describe(`WHc2png`, function() {
         let rt = null
         if (isWindows()) {
             let t = await testb()
-            rr = t.ret.length
-            rt = t.ans.length
+            rr = t.ret
+            rt = t.ans
         }
         else {
             rr = 1
