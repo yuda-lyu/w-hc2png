@@ -60,7 +60,7 @@ async function testa() {
     let b64 = await WHc2png(width, height, scale, opt)
     // console.log('b64', b64)
 
-    fs.writeFileSync('./test-scla.b64', b64)
+    // fs.writeFileSync('./test-scla.b64', b64)
     genPlotHtml('./test-scla.html', b64)
 
     console.log('finish')

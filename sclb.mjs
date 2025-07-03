@@ -67,7 +67,7 @@ async function testb() {
     let b64 = await WHc2png(width, height, scale, cOpt, whOpt)
     // console.log('b64', b64)
 
-    fs.writeFileSync('./test-sclb.b64', b64)
+    // fs.writeFileSync('./test-sclb.b64', b64)
     genPlotHtml('./test-sclb.html', b64)
 
     console.log('finish')
