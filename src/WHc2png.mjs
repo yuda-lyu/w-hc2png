@@ -18,7 +18,7 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
 
 
 /**
- * 呼叫Chromium轉Highcharts設定檔(含數據)為png圖
+ * 開啟瀏覽器依照Highcharts設定檔(含數據)繪圖並儲存成png
  *
  * @class
  * @param {Number} [width=700] 輸入圖片原始寬度數字，單位px，預設700
@@ -29,8 +29,8 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
  * @param {Array} [whOpt.scriptsHead=[]] 輸入引用js程式碼網址陣列，預設[]
  * @param {String|Array} [whOpt.execJsHead=''] 輸入插入head內執行js程式碼字串或陣列，預設''
  * @param {String|Array} [whOpt.execJsPost=''] 輸入於dom末插入執行js程式碼字串或陣列，預設''
- * @param {String} [whOpt.executablePath=''] 輸入puppeteer的executablePath字串，預設''
- * @param {String} [whOpt.executableFolder=''] 輸入不提供executablePath時則提供搜索chrome.exe所在資料夾字串，找到後將自動給予puppeteer的executablePath，預設''
+ * @param {Integer} [whOpt.retry=3] 輸入失敗重試次數整數，預設3
+ * @param {Boolean} [whOpt.writeError=false] 輸入是否輸出錯誤訊息至檔案布林值，預設false
  * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
  * @example
  *
