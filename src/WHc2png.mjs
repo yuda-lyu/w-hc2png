@@ -31,6 +31,10 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
  * @param {String|Array} [whOpt.execJsPost=''] 輸入於dom末插入執行js程式碼字串或陣列，預設''
  * @param {Integer} [whOpt.retry=3] 輸入失敗重試次數整數，預設3
  * @param {Boolean} [whOpt.writeError=false] 輸入是否輸出錯誤訊息至檔案布林值，預設false
+ * @param {String} [whOpt.fdPng='./_convertTemp'] 輸入臨時儲存圖片png檔之資料夾位置字串，預設'./_convertTemp'
+ * @param {String} [whOpt.fdHtml='./_convertTemp'] 輸入臨時儲存繪圖用html檔之資料夾位置字串，預設'./_convertTemp'
+ * @param {String} [whOpt.fdProfile='./_convertTemp'] 輸入臨時儲存瀏覽器使用者資料之資料夾位置字串，預設'./_convertTemp'
+ * @param {String} [whOpt.fdErr='./_convertTemp'] 輸入臨時儲存錯誤檔之資料夾位置字串，預設'./_convertTemp'
  * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
  * @example
  *
