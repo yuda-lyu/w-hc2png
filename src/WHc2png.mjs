@@ -167,6 +167,9 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
 async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {}) {
     // console.log('WHc2png', width, height, scale, opt, whOpt)
 
+    //淺拷貝whOpt, 避免後續擴充execJsHead與execJsPost時改寫呼叫端物件, 導致重用同一whOpt時繪圖碼逐次疊加
+    whOpt = { ...whOpt }
+
     //width
     if (!isnum(width)) {
         return Promise.reject('width is not a number')
