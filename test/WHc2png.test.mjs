@@ -8,7 +8,7 @@ function isWindows() {
 }
 
 
-async function testa() {
+async function testa(whOpt = {}) {
 
     let width = 500
     let height = 400
@@ -49,7 +49,7 @@ async function testa() {
 
     let ans = fs.readFileSync('./test/test-scla.b64', 'utf8')
 
-    let ret = await WHc2png(width, height, scale, opt)
+    let ret = await WHc2png(width, height, scale, opt, whOpt)
 
     return {
         ans,
@@ -118,11 +118,31 @@ async function testb() {
 
 describe(`WHc2png`, function() {
 
+    after(async function() {
+        //關閉常駐瀏覽器, 使測試結束後Node行程可立即退出
+        await WHc2png.close()
+    })
+
     it(`should return (base64) when run testa `, async function() {
         let rr = null
         let rt = null
         if (isWindows()) {
             let t = await testa()
+            rr = t.ret
+            rt = t.ans
+        }
+        else {
+            rr = 1
+            rt = 1
+        }
+        assert.strict.deepStrictEqual(rr, rt)
+    })
+
+    it(`should return (base64) when run testa with whOpt.mode='alive' `, async function() {
+        let rr = null
+        let rt = null
+        if (isWindows()) {
+            let t = await testa({ mode: 'alive' })
             rr = t.ret
             rt = t.ans
         }
