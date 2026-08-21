@@ -1,16 +1,16 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.57",
+  "version": "1.0.58",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^21.4.9",
     "highcharts": "^11.4.8",
     "json5": "^2.2.3",
-    "w-html2png": "^1.0.40",
-    "wsemi": "^1.8.78"
+    "w-html2png": "^1.0.41",
+    "wsemi": "^1.8.79"
   },
   "devDependencies": {
-    "w-package-tools": "^1.1.14"
+    "w-package-tools": "^1.1.15"
   },
   "scripts": {
     "test": "mocha --parallel --timeout 60000",
