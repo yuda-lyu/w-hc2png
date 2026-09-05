@@ -1,13 +1,13 @@
 {
   "name": "w-hc2png",
-  "version": "1.0.62",
+  "version": "1.0.63",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^21.4.9",
     "highcharts": "^11.4.8",
     "json5": "^2.2.3",
-    "w-html2png": "^1.0.45",
-    "wsemi": "^1.8.84"
+    "w-html2png": "^1.0.46",
+    "wsemi": "^1.8.85"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.15"
