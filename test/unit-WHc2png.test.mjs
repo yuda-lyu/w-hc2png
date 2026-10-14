@@ -1,6 +1,6 @@
 import fs from 'fs'
-import assert from 'assert'
 import WHc2png from '../src/WHc2png.mjs'
+import { assertChartPng } from './tools/assertChart.mjs'
 
 
 function isWindows() {
@@ -123,49 +123,31 @@ describe(`WHc2png`, function() {
         await WHc2png.close()
     })
 
-    it(`should return (base64) when run testa `, async function() {
-        let rr = null
-        let rt = null
-        if (isWindows()) {
-            let t = await testa()
-            rr = t.ret
-            rt = t.ans
+    //R6: 出圖為PNG、尺寸=寬高×scale(500×400×3)、非空白, 並與基準圖(test/test-scla.b64)容差比對; 不重產基準圖(裁示D-8)
+    //R10: 非Windows無法出圖(w-html2png限Windows), 以skip呈現而非恆過
+    it(`should return png matching baseline within tolerance when run testa `, async function() {
+        if (!isWindows()) {
+            this.skip()
         }
-        else {
-            rr = 1
-            rt = 1
-        }
-        assert.strict.deepStrictEqual(rr, rt)
+        let t = await testa()
+        assertChartPng(Buffer.from(t.ret, 'base64'), { width: 1500, height: 1200, baseline: Buffer.from(t.ans, 'base64'), name: 'unit-WHc2png-testa' })
     })
 
-    it(`should return (base64) when run testa with whOpt.mode='alive' `, async function() {
-        let rr = null
-        let rt = null
-        if (isWindows()) {
-            let t = await testa({ mode: 'alive' })
-            rr = t.ret
-            rt = t.ans
+    it(`should return png matching baseline within tolerance when run testa with whOpt.mode='alive' `, async function() {
+        if (!isWindows()) {
+            this.skip()
         }
-        else {
-            rr = 1
-            rt = 1
-        }
-        assert.strict.deepStrictEqual(rr, rt)
+        let t = await testa({ mode: 'alive' })
+        assertChartPng(Buffer.from(t.ret, 'base64'), { width: 1500, height: 1200, baseline: Buffer.from(t.ans, 'base64'), name: 'unit-WHc2png-testa-alive' })
     })
 
-    it(`should return (base64) when run testb `, async function() {
-        let rr = null
-        let rt = null
-        if (isWindows()) {
-            let t = await testb()
-            rr = t.ret
-            rt = t.ans
+    //R6: 字串opt(iife程式碼)出圖, 與基準圖(test/test-sclb.b64)容差比對
+    it(`should return png matching baseline within tolerance when run testb `, async function() {
+        if (!isWindows()) {
+            this.skip()
         }
-        else {
-            rr = 1
-            rt = 1
-        }
-        assert.strict.deepStrictEqual(rr, rt)
+        let t = await testb()
+        assertChartPng(Buffer.from(t.ret, 'base64'), { width: 1500, height: 1200, baseline: Buffer.from(t.ans, 'base64'), name: 'unit-WHc2png-testb' })
     })
 
 })

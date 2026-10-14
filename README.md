@@ -21,7 +21,8 @@ npm i w-hc2png
 #### Example for function:
 > **Link:** [[dev source code](https://github.com/yuda-lyu/w-hc2png/blob/master/scla.mjs)]
 ```alias
-import WHc2png from './src/WHc2png.mjs'
+import fs from 'fs'
+import WHc2png from 'w-hc2png'
 
 function genPlotHtml(fp, b64) {
     let h = `
@@ -157,6 +158,9 @@ import WHc2pngServer from 'w-hc2png/src/WHc2pngServer.mjs'
 let opt = {
     port: 9020,
     apiName: 'api',
+    // host: 'localhost', //default 'localhost' (loopback only); use '0.0.0.0' to accept remote connections
+    // cors: true, //default true (any web page may call the API cross-origin); set false or a Hapi cors object to restrict
+    // whOpt: { executablePath: '...', retry: 3, writeError: false, fdErr: './_convertTemp' }, //server-side drawing options
 }
 WHc2pngServer(opt)
 
@@ -168,6 +172,7 @@ WHc2pngServer(opt)
     width: 500,
     height: 400,
     scale: 3,
+    whOpt: {}, //optional, only keys mode, scriptsHead, stylesHead, execJsHead, execJsPost are accepted
     opt: {
     
         title: {
@@ -203,4 +208,15 @@ WHc2pngServer(opt)
     }
 
 }
+
+------------------------
+
+response: { b64: 'data:image/png;base64, ...' } or { err: '...' },
+plus ignoredWhOpt: [...] when the request whOpt contains keys that are not accepted
 ```
+
+#### Server security notes:
+- The server binds to `localhost` by default. Exposing it (`host: '0.0.0.0'`) is only recommended behind a gateway/reverse proxy that restricts who can call it.
+- `opt` given as a string, and `whOpt.execJsHead` / `whOpt.execJsPost`, are JavaScript executed in a Chrome launched with `--no-sandbox`. This is inherent to the feature: anyone who can call the API can run arbitrary JavaScript in that browser.
+- `cors` defaults to `true`, so any web page opened by a user on the same machine/network can call the API from the browser. Set `cors: false` (or a Hapi cors object with specific origins) when cross-origin calls are not needed.
+- From the request, `whOpt` only accepts `mode`, `scriptsHead`, `stylesHead`, `execJsHead`, `execJsPost`. Settings that involve paths, processes or file writes (such as `executablePath`, `modeHeadless`, `retry`, `writeError`, `fdHtml`, `fdErr`) are ignored and listed in the response field `ignoredWhOpt`; provide them on the server side via `WHc2pngServer({ whOpt })`.

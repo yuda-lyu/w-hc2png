@@ -1,20 +1,43 @@
 import fs from 'fs'
+import { createRequire } from 'module'
 import get from 'lodash-es/get.js'
 import isnum from 'wsemi/src/isnum.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import cdbl from 'wsemi/src/cdbl.mjs'
-import WHtml2png from 'w-html2png/src/WHtml2png.mjs'
+import WHtml2png from 'w-html2png' //引用其main(CJS之dist), 打包時外部化而不內嵌, 使同行程只有一份常駐瀏覽器狀態(帳本R1, R9)
 
 
-//提供給網頁用的highcharts程式碼
-let code_highcharts = fs.readFileSync('./node_modules/highcharts/highcharts.js', 'utf8')
-let code_highcharts_more = fs.readFileSync('./node_modules/highcharts/highcharts-more.js', 'utf8')
-let code_stock = fs.readFileSync('./node_modules/highcharts/modules/stock.js', 'utf8')
-let code_annotations = fs.readFileSync('./node_modules/highcharts/modules/annotations.js', 'utf8')
-let code_heatmap = fs.readFileSync('./node_modules/highcharts/modules/heatmap.js', 'utf8')
-let code_boost = fs.readFileSync('./node_modules/highcharts/modules/boost.js', 'utf8')
-let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost-canvas.js', 'utf8')
+//requireSelf, 以本模組所在位置解析相依套件之檔案, 不依賴工作目錄, 也不會讀到呼叫端根目錄之其他版本highcharts(帳本R4)
+//注意: 不可於頂層宣告__filename/__dirname, 打包為umd時rollup之import.meta.url墊片會引用CJS之__filename而自我參照(TDZ)
+let requireSelf = createRequire(import.meta.url)
+
+
+//fpsHighcharts, 提供給網頁用的highcharts程式碼(依注入順序)
+let fpsHighcharts = [
+    'highcharts.js',
+    'highcharts-more.js',
+    'modules/stock.js',
+    'modules/annotations.js',
+    'modules/heatmap.js',
+    'modules/boost.js',
+    'modules/boost-canvas.js',
+]
+
+
+//codesHighcharts, 首次呼叫時才讀取並快取, 載入本模組時不讀檔(帳本R4)
+let codesHighcharts = null
+
+
+//getCodesHighcharts, 取得highcharts程式碼, 讀取失敗時拋錯(不快取失敗結果, 下次呼叫重讀)
+let getCodesHighcharts = () => {
+    if (codesHighcharts === null) {
+        codesHighcharts = fpsHighcharts.map((fp) => {
+            return fs.readFileSync(requireSelf.resolve(`highcharts/${fp}`), 'utf8')
+        })
+    }
+    return codesHighcharts
+}
 
 
 /**
@@ -23,24 +46,26 @@ let code_boost_canvas = fs.readFileSync('./node_modules/highcharts/modules/boost
  * 底層透過w-html2png以Chromium繪圖，提供兩種瀏覽器使用模式(whOpt.mode)：
  * 'single'為每次呼叫啟動新瀏覽器，出圖後即關閉釋放，Node行程可自然結束，適合排程批次；
  * 'alive'為常駐瀏覽器，第一次呼叫時啟動，同行程後續呼叫重用故出圖較快，閒置超過1小時自動關閉，
- * 批次腳本結束前可呼叫WHc2png.close()主動關閉常駐瀏覽器，使Node行程可立即退出
+ * 批次腳本結束前可呼叫WHc2png.close()主動關閉常駐瀏覽器，使Node行程可立即退出；
+ * 常駐瀏覽器與同行程中直接引用之w-html2png(其main)共用
+ *
+ * 注入網頁之Highcharts程式碼取自本套件相依之highcharts(以本模組所在位置解析，不受工作目錄影響)，於第一次呼叫時讀取並快取
  *
  * @class
  * @param {Number} [width=700] 輸入圖片原始寬度數字，單位px，預設700
  * @param {Number} [height=400] 輸入圖片原始高度數字，單位px，預設400
  * @param {Number} [scale=3] 輸入欲將圖片放大比例數字，單位px，預設3
- * @param {Object|String} [opt={}] 輸入Highcharts設定物件或字串，可給予iife執行程式碼直接回傳Highcharts設定物件，預設{}
+ * @param {Object|String} [opt={}] 輸入Highcharts設定物件或字串，可給予iife執行程式碼直接回傳Highcharts設定物件，給予字串時為於網頁內執行之程式碼，須自行宣告opt且不得含字面之「&lt;/script&gt;」，預設{}
  * @param {Object} [whOpt={}] 輸入設定物件，預設{}
  * @param {String} [whOpt.mode='single'] 輸入瀏覽器使用模式字串，'single'代表每次呼叫啟閉瀏覽器，'alive'代表常駐瀏覽器供同行程重用，預設'single'
- * @param {String} [whOpt.executablePath=''] 輸入瀏覽器執行檔路徑字串，未給則使用套件自帶之免安裝chrome，預設''
+ * @param {String} [whOpt.executablePath=''] 輸入瀏覽器執行檔路徑字串，未給則使用套件自帶之免安裝chrome；注意alive模式之常駐瀏覽器由同行程第一次呼叫決定執行檔，欲切換須先呼叫WHc2png.close()，預設''
+ * @param {Array} [whOpt.stylesHead=[]] 輸入引用css程式碼網址陣列，預設[]
  * @param {Array} [whOpt.scriptsHead=[]] 輸入引用js程式碼網址陣列，預設[]
  * @param {String|Array} [whOpt.execJsHead=''] 輸入插入head內執行js程式碼字串或陣列，預設''
- * @param {String|Array} [whOpt.execJsPost=''] 輸入於dom末插入執行js程式碼字串或陣列，預設''
+ * @param {String|Array} [whOpt.execJsPost=''] 輸入於dom末插入執行js程式碼字串或陣列，於繪圖程式碼之前執行，預設''
  * @param {Integer} [whOpt.retry=3] 輸入失敗重試次數整數，預設3
  * @param {Boolean} [whOpt.writeError=false] 輸入是否輸出錯誤訊息至檔案布林值，預設false
- * @param {String} [whOpt.fdPng='./_convertTemp'] 輸入臨時儲存圖片png檔之資料夾位置字串，預設'./_convertTemp'
- * @param {String} [whOpt.fdHtml='./_convertTemp'] 輸入臨時儲存繪圖用html檔之資料夾位置字串，預設'./_convertTemp'
- * @param {String} [whOpt.fdProfile='./_convertTemp'] 輸入臨時儲存瀏覽器使用者資料之資料夾位置字串，預設'./_convertTemp'
+ * @param {String} [whOpt.fdHtml='./_convertTemp'] 輸入臨時儲存繪圖用html檔之資料夾位置字串，僅給予whOpt.funGetUrl時才產生html暫存檔，預設'./_convertTemp'
  * @param {String} [whOpt.fdErr='./_convertTemp'] 輸入臨時儲存錯誤檔之資料夾位置字串，預設'./_convertTemp'
  * @returns {Promise} 回傳Promise，resolve為回傳base64圖片，reject為錯誤訊息
  * @example
@@ -209,16 +234,14 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
         return Promise.reject('opt is not an effective object or string')
     }
 
-    //execJsHead
-    let execJsHead = [
-        code_highcharts,
-        code_highcharts_more,
-        code_stock,
-        code_annotations,
-        code_heatmap,
-        code_boost,
-        code_boost_canvas,
-    ]
+    //execJsHead, highcharts程式碼(首次呼叫時讀取並快取)
+    let execJsHead = null
+    try {
+        execJsHead = getCodesHighcharts()
+    }
+    catch (err) {
+        return Promise.reject(`can not read highcharts: ${err.message}`)
+    }
 
     //cOpt
     let cOpt = ''
@@ -226,7 +249,11 @@ async function WHc2png(width = 700, height = 400, scale = 3, opt = {}, whOpt = {
         cOpt = opt //外部給予opt字串時須自行給予let opt=ooo
     }
     else {
+        //j, 嵌入inline script之JSON(帳本R8): 字元「<」改為其unicode跳脫序列(反斜線u003c), 避免文字內之</script>提前結束script而中斷繪圖;
+        //字元「$」改為其unicode跳脫序列(反斜線u0024), 避免被w-html2png之模板字串替換當成特殊樣式($&、$'等)改寫; 兩者於JS字串內解讀後與原文字相同
         let j = JSON.stringify(opt)
+            .replace(/</g, '\\u003c')
+            .replace(/\$/g, '\\u0024')
         cOpt = `let opt=${j};`
     }
 

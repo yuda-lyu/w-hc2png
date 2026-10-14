@@ -1,6 +1,7 @@
 import fs from 'fs'
 import assert from 'assert'
 import WHc2pngServer from '../src/WHc2pngServer.mjs'
+import { assertChartPng } from './tools/assertChart.mjs'
 
 
 function isWindows() {
@@ -61,6 +62,9 @@ async function testServer() {
     })
     let j = await resp.json()
 
+    //回應須為data url(錯誤時為{err})
+    assert.ok(typeof j.b64 === 'string' && j.b64.startsWith('data:image/png;base64, '), `response has no b64: ${JSON.stringify(j).slice(0, 300)}`)
+
     //剝除data url前綴取回裸base64, 與baseline比對
     let ret = j.b64.replace('data:image/png;base64, ', '')
 
@@ -88,19 +92,14 @@ describe(`WHc2pngServer`, function() {
         }
     })
 
-    it(`should return (data url base64) via http POST `, async function() {
-        let rr = null
-        let rt = null
-        if (isWindows()) {
-            let t = await testServer()
-            rr = t.ret
-            rt = t.ans
+    //R6: 經http POST出圖, 回應之data url為PNG、尺寸=寬高×scale、非空白, 並與基準圖容差比對; 不重產基準圖(裁示D-8)
+    //R10: 非Windows以skip呈現
+    it(`should return (data url png) matching baseline within tolerance via http POST `, async function() {
+        if (!isWindows()) {
+            this.skip()
         }
-        else {
-            rr = 1
-            rt = 1
-        }
-        assert.strict.deepStrictEqual(rr, rt)
+        let t = await testServer()
+        assertChartPng(Buffer.from(t.ret, 'base64'), { width: 1500, height: 1200, baseline: Buffer.from(t.ans, 'base64'), name: 'api-WHc2pngServer' })
     })
 
 })
