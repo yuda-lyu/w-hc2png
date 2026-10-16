@@ -1,19 +1,19 @@
 {
   "name": "w-hc2png",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "main": "dist/w-hc2png.umd.js",
   "dependencies": {
     "@hapi/hapi": "^21.4.9",
     "highcharts": "^11.4.8",
     "json5": "^2.2.3",
-    "w-html2png": "^1.0.53",
+    "w-html2png": "^1.0.54",
     "wsemi": "^1.9.16"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.18"
   },
   "scripts": {
-    "test": "mocha --no-parallel \"test/*.test.mjs\" --timeout 180000",
+    "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
     "deploy": "gh-pages -d docs"
   },
   "repository": {
