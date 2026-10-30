@@ -3,6 +3,7 @@ import path from 'path'
 import assert from 'assert'
 import { fdRepo, isWindows, runNode } from './tools/child.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 //T-b: highcharts以本模組所在位置解析且於首次呼叫時才讀(帳本R4, 裁示D-9)
@@ -56,10 +57,7 @@ describe(`unit-hcResolve`, function() {
         let b = await runNode([fpCli, './src', path.relative(fdRepo, fdDist)], { cwd: fdRepo })
         assert.strict.equal(b.code, 0, b.out.slice(-800))
 
-        if (isWindows()) {
-            let { default: autoDownloadFiles } = await import('w-html2png/src/autoDownloadFiles.mjs')
-            exe = (await autoDownloadFiles()).fpExe
-        }
+        exe = await getChromeExe()
     })
 
     after(function() {

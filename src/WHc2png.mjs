@@ -58,7 +58,7 @@ let getCodesHighcharts = () => {
  * @param {Object|String} [opt={}] 輸入Highcharts設定物件或字串，可給予iife執行程式碼直接回傳Highcharts設定物件，給予字串時為於網頁內執行之程式碼，須自行宣告opt且不得含字面之「&lt;/script&gt;」，預設{}
  * @param {Object} [whOpt={}] 輸入設定物件，預設{}
  * @param {String} [whOpt.mode='single'] 輸入瀏覽器使用模式字串，'single'代表每次呼叫啟閉瀏覽器，'alive'代表常駐瀏覽器供同行程重用，預設'single'
- * @param {String} [whOpt.executablePath=''] 輸入瀏覽器執行檔路徑字串，未給則使用套件自帶之免安裝chrome；注意alive模式之常駐瀏覽器由同行程第一次呼叫決定執行檔，欲切換須先呼叫WHc2png.close()，預設''
+ * @param {String} [whOpt.executablePath=''] 輸入瀏覽器執行檔路徑字串，未給則使用w-html2png自帶之免安裝chrome(只支援Windows，首次使用時經w-html2png之ensureBins下載並校驗，快取於w-html2png套件根之bin-cache，與工作目錄無關，亦可預先呼叫WHtml2png.ensureBins取得，見w-html2png說明)；注意alive模式之常駐瀏覽器由同行程第一次呼叫決定執行檔，欲切換須先呼叫WHc2png.close()，預設''
  * @param {Array} [whOpt.stylesHead=[]] 輸入引用css程式碼網址陣列，預設[]
  * @param {Array} [whOpt.scriptsHead=[]] 輸入引用js程式碼網址陣列，預設[]
  * @param {String|Array} [whOpt.execJsHead=''] 輸入插入head內執行js程式碼字串或陣列，預設''

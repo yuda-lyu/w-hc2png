@@ -5,6 +5,7 @@ import { builtinModules } from 'module'
 import { distConfig } from '../toolg/distConfig.mjs'
 import { fdRepo, isWindows, runNode } from './tools/child.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 //T-a: 以與發布同一份設定(toolg/distConfig.mjs)由現行src建出dist至test/_tmp, 驗證可載入且可完成最小繪圖(帳本R1, R2, R3, R4, R5, R9)
@@ -64,11 +65,8 @@ describe(`unit-dist`, function() {
         //建置: 與toolg/gDistRollup.mjs同一建置函數與設定, 輸出限定test/_tmp
         build = await runNode([fpCli, './src', path.relative(fdRepo, fdDist)], { cwd: fdRepo })
 
-        //exe, 他處cwd時須明給執行檔(w-html2png之預設chrome依cwd定位)
-        if (isWindows()) {
-            let { default: autoDownloadFiles } = await import('w-html2png/src/autoDownloadFiles.mjs')
-            exe = (await autoDownloadFiles()).fpExe
-        }
+        //exe, 明給w-html2png自帶chrome之執行檔(經公開入口ensureBins取得), 涵蓋whOpt.executablePath之傳遞
+        exe = await getChromeExe()
     })
 
     after(function() {

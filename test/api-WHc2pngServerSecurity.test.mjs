@@ -9,6 +9,7 @@ import WHc2pngServer from '../src/WHc2pngServer.mjs'
 import { decodePng, pixelAt } from './tools/png.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
 import { isWindows } from './tools/child.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 //D-11: Server之安全面(帳本R12, R13, R14); 埠9022-9026
@@ -88,10 +89,7 @@ describe(`api-WHc2pngServerSecurity`, function() {
     before(async function() {
         fs.rmSync(fdCase, { recursive: true, force: true })
         fs.mkdirSync(fdCase, { recursive: true })
-        if (isWindows()) {
-            let { default: autoDownloadFiles } = await import('w-html2png/src/autoDownloadFiles.mjs')
-            exe = (await autoDownloadFiles()).fpExe
-        }
+        exe = await getChromeExe()
     })
 
     after(async function() {
