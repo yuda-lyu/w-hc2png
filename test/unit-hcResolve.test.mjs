@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import assert from 'assert'
 import { fdRepo, isWindows, runNode } from './tools/child.mjs'
+import { makeBuildCopy, runToolg } from './tools/buildCopy.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
 import { getChromeExe } from './tools/chromeExe.mjs'
 
@@ -11,12 +12,11 @@ import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 let fdCase = path.resolve('./test/_tmp/unit-hcResolve')
-let fdDist = path.join(fdCase, 'dist')
-let fpDist = path.join(fdDist, 'w-hc2png.umd.js')
+let fdBuild = path.join(fdCase, 'build')
+let fpDist = path.join(fdBuild, 'dist', 'w-hc2png.umd.js')
 let fdFake = path.join(fdCase, 'fakeRoot')
 let fdEmpty = path.join(fdCase, 'emptyCwd')
 let fpSrc = path.resolve('./src/WHc2png.mjs')
-let fpCli = path.resolve('./test/tools/distBuildCli.mjs')
 let fpChildDraw = path.resolve('./test/tools/childDraw.mjs')
 
 let fpsHc = ['highcharts.js', 'highcharts-more.js', 'modules/stock.js', 'modules/annotations.js', 'modules/heatmap.js', 'modules/boost.js', 'modules/boost-canvas.js']
@@ -53,8 +53,9 @@ describe(`unit-hcResolve`, function() {
             fs.writeFileSync(path.join(fdHc, fp), fp === 'highcharts.js' ? 'window.Highcharts = { chart: function () {} }\n' : '//fake\n')
         }
 
-        //本檔自建dist(不依賴其他測試檔之產物)
-        let b = await runNode([fpCli, './src', path.relative(fdRepo, fdDist)], { cwd: fdRepo })
+        //本檔自建dist(不依賴其他測試檔之產物): 副本內以cwd=副本執行toolg/gDistRollup.mjs
+        makeBuildCopy(fdBuild)
+        let b = await runToolg(fdBuild, 'gDistRollup')
         assert.strict.equal(b.code, 0, b.out.slice(-800))
 
         exe = await getChromeExe()

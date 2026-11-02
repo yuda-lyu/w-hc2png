@@ -1,25 +1,31 @@
 import fs from 'fs'
 import path from 'path'
 import assert from 'assert'
+import crypto from 'crypto'
 import { builtinModules } from 'module'
-import { distConfig } from '../toolg/distConfig.mjs'
 import { fdRepo, isWindows, runNode } from './tools/child.mjs'
+import { makeBuildCopy, runToolg } from './tools/buildCopy.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
 import { getChromeExe } from './tools/chromeExe.mjs'
 
 
-//T-a: 以與發布同一份設定(toolg/distConfig.mjs)由現行src建出dist至test/_tmp, 驗證可載入且可完成最小繪圖(帳本R1, R2, R3, R4, R5, R9)
-//repo之dist/只於發布時重建, 本測試不讀也不改寫repo之dist/
+//T-a: 依dspec〈自有套件之發布與建置腳本〉規則4, 把src、toolg、package.json複製到test/_tmp/unit-dist/build, 以cwd=副本執行toolg/gDistRollup.mjs建出dist,
+//驗證可載入且可完成最小繪圖(帳本R1, R2, R3, R4, R5, R9); repo之dist/只於發布時重建, 本測試不讀也不改寫(僅比對建置前後之雜湊, 證明未被觸及)
 
 
 let fdCase = path.resolve('./test/_tmp/unit-dist')
-let fdDist = path.join(fdCase, 'dist')
+let fdBuild = path.join(fdCase, 'build')
+let fdDist = path.join(fdBuild, 'dist')
 let fpDist = path.join(fdDist, 'w-hc2png.umd.js')
+let fpRepoDist = path.resolve('./dist/w-hc2png.umd.js')
 let fpSrc = path.resolve('./src/WHc2png.mjs')
-let fpCli = path.resolve('./test/tools/distBuildCli.mjs')
 let fpChildDraw = path.resolve('./test/tools/childDraw.mjs')
 let fpChildDual = path.resolve('./test/tools/childDual.mjs')
 let pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'))
+
+
+//R1: dist外部化之模組集合(Node內建fs、module與已宣告相依w-html2png); 增減外部模組須同步改本表與toolg/gDistRollup.mjs
+let externals = ['fs', 'module', 'w-html2png']
 
 
 let optA = {
@@ -30,13 +36,24 @@ let optA = {
 }
 
 
-//headerRequires, 取產物UMD頭(CommonJS分支)之require清單
-function headerRequires(code) {
+//headerExternals, 取產物UMD頭三個分支之外部模組清單: CommonJS之require、AMD之define依賴、全域(瀏覽器)之globals名(UMD全域名w-hc2png)
+function headerExternals(code) {
     let head = code.slice(0, 20000)
     let i0 = head.indexOf('module.exports=')
     let i1 = head.indexOf(':"function"==typeof define', i0)
-    assert.ok(i0 >= 0 && i1 > i0, 'can not find umd header')
-    return [...head.slice(i0, i1).matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1])
+    let i2 = head.indexOf('define([', i1)
+    let i3 = head.indexOf('}(this,', i2)
+    assert.ok(i0 >= 0 && i1 > i0 && i2 > i1 && i3 > i2, 'can not find umd header')
+    let cjs = [...head.slice(i0, i1).matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1])
+    let amd = JSON.parse(head.slice(i2 + 'define('.length, head.indexOf(']', i2) + 1))
+    let mg = head.slice(i2, i3).match(/\["w-hc2png"\]=\w+\(([^)]*)\)/)
+    assert.ok(mg, 'can not find umd global branch')
+    let globals = mg[1].split(',').map((v) => {
+        let m = v.match(/^\w+\.(\w+)$/) || v.match(/^\w+\["([^"]+)"\]$/)
+        assert.ok(m, `can not parse umd global[${v}]`)
+        return m[1]
+    })
+    return { cjs, amd, globals }
 }
 
 
@@ -57,13 +74,16 @@ describe(`unit-dist`, function() {
 
     let build = null
     let exe = ''
+    let hashRepoDistBefore = null
 
     before(async function() {
         fs.rmSync(fdCase, { recursive: true, force: true })
         fs.mkdirSync(fdCase, { recursive: true })
 
-        //建置: 與toolg/gDistRollup.mjs同一建置函數與設定, 輸出限定test/_tmp
-        build = await runNode([fpCli, './src', path.relative(fdRepo, fdDist)], { cwd: fdRepo })
+        //建置: 副本內以cwd=副本執行toolg/gDistRollup.mjs(其'./src'、'./dist'相對副本)
+        hashRepoDistBefore = fs.existsSync(fpRepoDist) ? crypto.createHash('sha256').update(fs.readFileSync(fpRepoDist)).digest('hex') : null
+        makeBuildCopy(fdBuild)
+        build = await runToolg(fdBuild, 'gDistRollup')
 
         //exe, 明給w-html2png自帶chrome之執行檔(經公開入口ensureBins取得), 涵蓋whOpt.executablePath之傳遞
         exe = await getChromeExe()
@@ -82,13 +102,33 @@ describe(`unit-dist`, function() {
         assert.ok(!/invalid runin/.test(build.out), 'runin not given')
     })
 
-    //R1: UMD頭之外部模組 = distConfig.external(= globals之鍵), 且 ⊆ Node內建 ∪ package.json之dependencies
+    //R2: gDistRollup以runin:'nodejs'建置, 未列external之Node內建模組(如path)可解析, 無could-not-be-resolved
+    //(src現僅用已列external之fs、module, 故另於副本之entry頂端加入path之import以使runin可被觀察)
+    it(`should resolve unlisted Node builtins when building as nodejs `, async function() {
+        let fd = makeBuildCopy(path.join(fdCase, 'build-runin'))
+        let fpEntry = path.join(fd, 'src', 'WHc2png.mjs')
+        fs.writeFileSync(fpEntry, `import nodePath from 'path'\nexport let probePathSep = nodePath.sep\n${fs.readFileSync(fpEntry, 'utf8')}`)
+        let r = await runToolg(fd, 'gDistRollup')
+        assert.strict.equal(r.code, 0, r.out.slice(-800))
+        assert.ok(/require\("path"\)/.test(fs.readFileSync(path.join(fd, 'dist', 'w-hc2png.umd.js'), 'utf8').slice(0, 2000)), 'path is not required by the product')
+        assert.strict.equal((r.out.match(/could not be resolved/g) || []).length, 0, r.out.slice(-800))
+        assert.ok(!/invalid runin/.test(r.out), 'runin not given')
+    })
+
+    //R3: 副本內執行建置腳本不觸及repo之dist/(cwd=副本, './dist'落在副本)
+    it(`should not touch repo dist when building in the copy `, async function() {
+        let hashAfter = fs.existsSync(fpRepoDist) ? crypto.createHash('sha256').update(fs.readFileSync(fpRepoDist)).digest('hex') : null
+        assert.strict.equal(hashAfter, hashRepoDistBefore)
+    })
+
+    //R1: UMD頭三個分支(require、AMD、全域)之外部模組皆 = externals(fs、module、w-html2png), 且 ⊆ Node內建 ∪ package.json之dependencies
     it(`should only require builtins and declared dependencies `, async function() {
-        let reqs = headerRequires(fs.readFileSync(fpDist, 'utf8'))
-        assert.deepStrictEqual([...reqs].sort(), [...distConfig.external].sort())
-        assert.deepStrictEqual([...distConfig.external].sort(), Object.keys(distConfig.globals).sort())
+        let { cjs, amd, globals } = headerExternals(fs.readFileSync(fpDist, 'utf8'))
+        assert.deepStrictEqual([...cjs].sort(), [...externals].sort())
+        assert.deepStrictEqual([...amd].sort(), [...externals].sort())
+        assert.deepStrictEqual([...globals].sort(), [...externals].sort())
         let allowed = new Set([...builtinModules, ...Object.keys(pkg.dependencies)])
-        for (let r of reqs) {
+        for (let r of cjs) {
             assert.ok(allowed.has(r) || allowed.has(r.replace(/^node:/, '')), `external[${r}] is neither builtin nor dependency`)
         }
     })

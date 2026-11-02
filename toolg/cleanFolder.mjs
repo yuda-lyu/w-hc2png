@@ -1,6 +1,5 @@
-import cleanFolderStrict from './cleanFolderStrict.mjs'
+import cleanFolder from 'w-package-tools/src/cleanFolder.mjs'
 
 
-//cleanFolderStrict, 清空失敗即拋錯, 使本腳本以非0結束(帳本R3)
-cleanFolderStrict('dist')
-cleanFolderStrict('docs')
+cleanFolder('dist')
+cleanFolder('docs')

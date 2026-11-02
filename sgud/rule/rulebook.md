@@ -12,24 +12,23 @@
 
 ### R1 打包策略與外部模組一致性(裁示 D-2,方案 S9)
 
-- 規則:dist 不內嵌任何自有套件之有狀態模組;`src/WHc2png.mjs` 以 `import WHtml2png from 'w-html2png'`(其 main 為 CJS dist)引用,打包時列 external。dist 之 UMD 頭外部模組集合 = `toolg/distConfig.mjs` 之 `external` = `globals` 之鍵 ⊆ Node 內建模組 ∪ `package.json` 之 `dependencies`。
+- 規則:dist 不內嵌任何自有套件之有狀態模組;`src/WHc2png.mjs` 以 `import WHtml2png from 'w-html2png'`(其 main 為 CJS dist)引用,打包時列 external。dist 之 UMD 頭外部模組集合 = `toolg/gDistRollup.mjs` 之 `external` = `globals` 之鍵 = `fs`、`module`、`w-html2png`,且 ⊆ Node 內建模組 ∪ `package.json` 之 `dependencies`。
 - 理由:playwright-core 以 `__dirname`/動態 require 定位自身檔案,打包必失真;內嵌 w-html2png 會帶入 playwright-core 並造成多份常駐瀏覽器(審計 F1、F2、F13)。
-- 單一擁有者:`toolg/distConfig.mjs`(建置與測試共用;`toolg/gDistRollup.mjs` 只引用)。
+- 單一擁有者:`toolg/gDistRollup.mjs`(選項寫於本檔;寫法依 dspec〈自有套件之發布與建置腳本〉規則 4,測試以副本並指定 cwd 執行該腳本,不共用設定檔)。
 - 盤點:建置後讀產物頭 `module.exports=t(require(...))` 之清單與 `*.umd.js.map` 之 `sources`。
-- 測試:`test/unit-dist.test.mjs`(外部模組集合、sourcemap、載入、出圖)。
+- 測試:`test/unit-dist.test.mjs`(外部模組集合於測試內明列、sourcemap、載入、出圖)。
 
 ### R2 本套件為 Node-only,建置一律 `runin: 'nodejs'`
 
-- 站點:`toolg/distConfig.mjs`。
+- 站點:`toolg/gDistRollup.mjs`(`runin: 'nodejs'`)。
 - 理由:未給時 w-package-tools 預設 browser(node-resolve `preferBuiltins:false`),Node 內建模組全列「could not be resolved」,且同名 npm 套件可遮蔽內建模組(審計 F4)。
 - 測試:`test/unit-dist.test.mjs`(建置輸出「could not be resolved」0 筆、無 `invalid runin`)。
 
 ### R3 建置與清空失敗以非 0 結束
 
-- 規則:建置失敗(rollup/babel 錯誤)時印出錯誤並 `process.exitCode = 1`;清空資料夾失敗(`cleanFolder` 回傳 `{error}` 或裸 `Error`)即拋錯。不得 catch 後只印出。
-- 站點:`toolg/distConfig.mjs`(`buildDist`)、`toolg/gDistRollup.mjs`、`toolg/cleanFolderStrict.mjs`、`toolg/cleanFolder.mjs`。
-- 盤點:Grep `\.catch\(\(err\) => \{\s*console\.log\(err\)` 於 `toolg/`(0 筆為已套)。
-- 測試:`test/unit-buildScript.test.mjs`(語法錯之來源 → 建置程序離開碼 1;目標為檔案 → `cleanFolderStrict` 拋錯;正常 → 0)。
+- 規則:依 dspec〈自有套件之發布與建置腳本〉規則 4 之標準寫法,本套件不另立寫法:`toolg/cleanFolder.mjs` 直接呼叫 w-package-tools 之 `cleanFolder('dist')`、`cleanFolder('docs')`(該函數失敗即拋錯並重試,故腳本以非 0 結束);`toolg/gDistRollup.mjs` 於建置失敗時印出錯誤並 `process.exitCode = 1`。
+- 站點:`toolg/gDistRollup.mjs`、`toolg/cleanFolder.mjs`。
+- 測試:`test/unit-buildScript.test.mjs`(以副本並指定 cwd 執行 toolg 腳本:語法錯之來源 → `gDistRollup.mjs` 離開碼 1;`dist` 或 `docs` 為檔案 → `cleanFolder.mjs` 非 0;正常 → 清空既有內容並建立缺少者、離開碼 0)。
 - 刻意不套:執行器是否於非 0 時中止屬主控發布流程(裁示 D-13)。
 
 ### R4 套件自身相依之檔案以模組位置解析,且延遲讀取(裁示 D-9,方案 S5')
@@ -41,7 +40,7 @@
 
 ### R5 dist 以「由現行 src 建出」者測載入與出圖
 
-- 規則:不得只測 src、不得只測可載入;repo 之 `dist/` 只於發布時重建,測試一律自建至 `test/_tmp/<案名>/`。
+- 規則:不得只測 src、不得只測可載入;repo 之 `dist/` 只於發布時重建,測試一律把 `src`、`toolg`、`package.json` 複製到 `test/_tmp/<案名>/` 副本,以 `spawn` 指定 cwd=副本執行 `toolg/gDistRollup.mjs` 自建(輔助 `test/tools/buildCopy.mjs`;dspec〈自有套件之發布與建置腳本〉規則 4)。
 - 測試:`test/unit-dist.test.mjs`。
 
 ### R6 圖像斷言:語意為主,像素容差為補強;非 Windows 以 skip 呈現(裁示 D-4、D-7、D-8)
@@ -102,6 +101,7 @@
 - 規則:`package.json` 之 test 為 `mocha --parallel "test/*.test.mjs" --timeout 180000`(w-html2png 1.0.54 已修跨行程首次下載撞檔,2026-10-16 改回並連跑 2 次 33 passing)。
 - 測試檔一律 `test/*.test.mjs` 並以 `unit-`/`api-` 前綴分層(裁示 D-6);輔助工具放 `test/tools/`;暫存放 `test/_tmp/<案名>/` 並於 `after` 清除;埠沿用 9021,新增 9022–9039。
 - 2026-10-31(w-html2png 1.0.57、wsemi 1.9.33 後):全套 `npm test` 37 passing(33 + R17 新增 4)。
+- 2026-11-02(toolg 改回 dspec 標準寫法、測試改以副本並指定 cwd 執行 toolg 腳本後):全套 38 passing(`unit-buildScript` 5→4、`unit-dist` 7→9、其餘不變)。
 
 ### R17 對 w-html2png 一律走公開入口(2026-10-31,主控排程第 182 項)
 
@@ -117,21 +117,22 @@
 |---|---|---|
 | `test/unit-WHc2png.test.mjs` | unit(原 `WHc2png.test.mjs`) | R6、R10、R11 |
 | `test/api-WHc2pngServer.test.mjs` | api(原 `WHc2pngServer.test.mjs`,埠 9021) | R6、R10 |
-| `test/unit-dist.test.mjs` | unit | R1、R2、R4、R5、R9、R17(`before` 取 chrome 路徑) |
-| `test/unit-hcResolve.test.mjs` | unit | R4、R17(同上) |
+| `test/unit-dist.test.mjs` | unit | R1、R2、R3、R4、R5、R9、R17(`before` 取 chrome 路徑) |
+| `test/unit-hcResolve.test.mjs` | unit | R4、R5、R17(同上) |
 | `test/unit-buildScript.test.mjs` | unit | R3 |
 | `test/unit-inject.test.mjs` | unit | R7、R8 |
 | `test/api-WHc2pngServerSecurity.test.mjs` | api(埠 9022–9026) | R12、R13、R14、R17(`before` 取 chrome 路徑) |
 | `test/unit-publicEntry.test.mjs` | unit | R17 |
 | `test/tools/chromeExe.mjs` | 輔助(非測試檔) | R17(`getChromeExe`) |
+| `test/tools/buildCopy.mjs` | 輔助(非測試檔) | R1、R2、R3、R5(`makeBuildCopy`/`runToolg`:副本並指定 cwd 執行 toolg 腳本,dspec 規則 4) |
 
 ## 2.1 站點與判準(2026-10-14 run02 實作後)
 
 | 規則 | 判準 | 站點 |
 |---|---|---|
-| R1 | 已套 | `src/WHc2png.mjs:8`(引 `w-html2png` main);`toolg/distConfig.mjs:6-10`(globals = fs/module/w-html2png)、`:19`(external = globals 之鍵) |
-| R2 | 已套 | `toolg/distConfig.mjs:17` |
-| R3 | 已套 | `toolg/distConfig.mjs:34-38`(失敗 `process.exitCode = 1`)、`toolg/gDistRollup.mjs:10`;`toolg/cleanFolderStrict.mjs:14-19`、`toolg/cleanFolder.mjs:5-6` |
+| R1 | 已套 | `src/WHc2png.mjs:8`(引 `w-html2png` main);`toolg/gDistRollup.mjs:19-23`(globals = fs/module/w-html2png)、`:24-28`(external) |
+| R2 | 已套 | `toolg/gDistRollup.mjs:15` |
+| R3 | 已套(依 dspec〈自有套件之發布與建置腳本〉規則 4) | `toolg/gDistRollup.mjs:33-36`(失敗 `process.exitCode = 1`);`toolg/cleanFolder.mjs:4-5`(直接呼叫 w-package-tools 之 `cleanFolder`) |
 | R4 | 已套 | `src/WHc2png.mjs:13`(`createRequire(import.meta.url)`)、`:33-40`(延遲讀取並快取)、`:240`(首次呼叫時取得);Grep 盤點僅命中 `:12` 之註解 |
 | R5、R9 | 已套 | `test/unit-dist.test.mjs` |
 | R6、R10 | 已套 | `test/tools/png.mjs`、`test/tools/assertChart.mjs`;各出圖案例首行 `if (!isWindows()) { this.skip() }` |
