@@ -49,6 +49,15 @@
 - 變異還原不用 git(禁用 checkout/restore/stash):變異前以 `git hash-object <檔>` 記雜湊,以 Edit 還原後再比對雜湊一致。
 - `npm i` 之副作用:`package.json` 檔尾補了換行(原無),無其他格式差異。
 
+## w-html2png 1.0.65 / `whOpt.timeout` 轉傳(2026-11-03,Gitea #61)
+
+- **轉傳類測試不能只看出圖結果**:`timeout: 60000` 時「被轉傳」與「被丟棄」皆正常回圖,issue 第 2.2 項單獨成立不了守護;須經 `whOpt.onTrace`(同樣整包轉傳)取 `attempt` 事件的 `timeout` 欄位(給了為該值、未給為 `null`),才能證明值到達 w-html2png。事件同步輔助 `test/tools/trace.mjs`(`makeTrace`)。
+- **`timeout: 1` 逾時發生於瀏覽器啟動中**(alive、single 皆然):訊息為 `timeout[1ms] in strategy.acquire (browser will be closed after launch)`,啟動完成後才在背景關閉並發 `browser-close` 事件;測試結束前 `await tr.wait('browser-close')`,免得留下殘留 chrome 與下一案重疊。永不到達時由 mocha 逾時判失敗,不另設固定等待。
+- **Server 請求端 `timeout` 的防線要雙向測**:伺服器端 1ms + 請求端 60000(防放寬;白名單誤加則請求端覆蓋而回圖)、伺服器端 60000 + 請求端 1(防收緊;誤加則逾時)。兩個方向的變異各只被其中一案擊殺。
+- **升 w-html2png 會洗掉 Chrome 快取**:`npm i w-html2png@x` 重建 `node_modules/w-html2png/`,其下 `bin-cache/`(約 400 MB)隨之消失,首次出圖須重新下載(約 30 秒且需網路)。先把 `bin-cache` 以 `mv` 搬到 `./tmp/`(同磁碟,瞬間完成),`npm i` 後搬回原位;搬回後以 `ls` 回驗。
+- **取閱未安裝套件之內容**:`npm pack <名>@<版> --pack-destination ./tmp/…` 後以**相對路徑**解開(`tar -xzf ./tmp/…/x.tgz -C ./tmp/…`);Git Bash 的 `tar` 會把 `C:/…` 當成 `主機:路徑` 而失敗。
+- **變異副本的跑法**:把 `src/`、`test/tools/` 與待測的測試檔複製到 `test/_tmp/<案名>/<變異id>/`(gitignore),在副本內以字串替換套用單點變異,以 `node node_modules/mocha/bin/mocha.js --no-parallel <副本測試檔>` 在 repo 根為 cwd 執行;副本在 repo 內,模組解析往上找到 repo 之 `node_modules`,不需 junction。腳本須先跑一個不變異之對照組(確認副本本身全綠),否則「被擊殺」可能只是副本壞了。
+
 ## 驗證手法
 
 - **頁面實際載入哪一版 Highcharts**:以字串 opt `let opt = { title: { text: 'Highcharts.version=' + Highcharts.version }, series: [{ data: [1,3,2,4] }] }` 出圖,版本直接畫在標題。

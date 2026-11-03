@@ -13,6 +13,8 @@ import WHc2png from './WHc2png.mjs'
 
 
 //keysWhOptReq, request之whOpt可給之鍵(白名單, 帳本R12): 只含繪圖用之設定, 不含涉及路徑、行程、寫檔之設定
+//timeout(帳本R18)不在此列: 逾時會關閉乃至強制結束該次所用之瀏覽器(服務預設為跨request共用之alive常駐瀏覽器, 並發中之其他request會失敗), 屬行程類設定, 只能由伺服器端opt.whOpt提供;
+//若開放, 請求端可給極大值取消伺服器端之時限, 或給極小值使共用瀏覽器反覆被關閉; onTrace為函數, 本就無法經JSON/JSON5傳入, 亦不在此列
 let keysWhOptReq = ['mode', 'scriptsHead', 'stylesHead', 'execJsHead', 'execJsPost']
 
 
@@ -23,7 +25,7 @@ let keysWhOptReq = ['mode', 'scriptsHead', 'stylesHead', 'execJsHead', 'execJsPo
  * 呼叫端於request之whOpt自帶mode則尊重其設定。服務停止(server.stop())時會自動關閉常駐瀏覽器釋放資源
  *
  * 安全(詳見README)：request之whOpt只採白名單鍵(mode、scriptsHead、stylesHead、execJsHead、execJsPost)，
- * 其餘(例如executablePath、modeHeadless、retry、writeError、fdHtml、fdErr)一律忽略，記錄於log並於回應之ignoredWhOpt列出；
+ * 其餘(例如executablePath、modeHeadless、retry、timeout、writeError、fdHtml、fdErr)一律忽略，記錄於log並於回應之ignoredWhOpt列出；
  * 涉及路徑、行程、寫檔之設定只能由伺服器端之opt.whOpt提供。字串opt與execJs類設定會在以--no-sandbox啟動之Chrome內執行任意JS，
  * 屬功能固有，故服務預設只綁本機(opt.host='localhost')，對外提供時應置於閘道之後並限制來源
  *
@@ -33,7 +35,7 @@ let keysWhOptReq = ['mode', 'scriptsHead', 'stylesHead', 'execJsHead', 'execJsPo
  * @param {String} [opt.apiName='api'] 輸入http API伺服器網址的api名稱，預設'api'
  * @param {String} [opt.host='localhost'] 輸入Hapi伺服器綁定之主機字串，預設'localhost'只接受本機連線，給予'0.0.0.0'等則對外開放，預設'localhost'
  * @param {Boolean|Object} [opt.cors=true] 輸入Hapi之routes.cors設定，true為允許任意來源之網頁跨域呼叫，false為不允許，亦可給予Hapi之cors設定物件，預設true
- * @param {Object} [opt.whOpt={}] 輸入伺服器端之繪圖設定物件(同WHc2png之whOpt)，可含executablePath、retry、writeError、fdErr等，request之白名單鍵會覆蓋同名鍵，預設{}
+ * @param {Object} [opt.whOpt={}] 輸入伺服器端之繪圖設定物件(同WHc2png之whOpt)，可含executablePath、retry、timeout(單次出圖之允許時長毫秒，見WHc2png之whOpt.timeout)、writeError、fdErr等，request之白名單鍵會覆蓋同名鍵(timeout不在白名單，請求端給了會被忽略)，預設{}
  * @returns {Promise} 回傳Promise，resolve為已啟動之Hapi server實例，可於需要時呼叫server.stop()關閉服務
  * @example
  *

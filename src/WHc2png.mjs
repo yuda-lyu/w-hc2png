@@ -64,6 +64,8 @@ let getCodesHighcharts = () => {
  * @param {String|Array} [whOpt.execJsHead=''] 輸入插入head內執行js程式碼字串或陣列，預設''
  * @param {String|Array} [whOpt.execJsPost=''] 輸入於dom末插入執行js程式碼字串或陣列，於繪圖程式碼之前執行，預設''
  * @param {Integer} [whOpt.retry=3] 輸入失敗重試次數整數，預設3
+ * @param {Number} [whOpt.timeout=null] 輸入單次出圖(每次嘗試)之允許時長毫秒數，整包轉傳至w-html2png之opt.timeout，有效正數(數字或數字字串)且不超過2147483647，預設null；超過視為該次嘗試失敗並依retry重試，訊息開頭為`timeout[Nms] in 步驟`(步驟如funPageWait、context.newPage()、page.goto())，可據以判斷卡在哪一步；逾時後頁面關得掉者不重啟瀏覽器，尚無頁面或關不掉者關閉(必要時確認歸屬後強制結束)本呼叫所用之瀏覽器，alive模式下同用該常駐瀏覽器之並發呼叫會失敗，由各自之retry接住；每次嘗試最長約timeout加25秒，計時不含取得套件自帶chrome與重試前之等待；未給或非預期之輸入視為未給，不限時，行為與未給時相同；詳見w-html2png之opt.timeout
+ * @param {Function} [whOpt.onTrace=null] 輸入觀察回調函數，格式為(e)=>{}，整包轉傳至w-html2png之opt.onTrace，e為凍結之事件物件{ type, ... }，於內部事件發生當下同步呼叫(供測試與診斷以事件而非等待時間同步)，其拋錯與回傳值皆忽略，預設null；事件type見w-html2png之opt.onTrace
  * @param {Boolean} [whOpt.writeError=false] 輸入是否輸出錯誤訊息至檔案布林值，預設false
  * @param {String} [whOpt.fdHtml='./_convertTemp'] 輸入臨時儲存繪圖用html檔之資料夾位置字串，僅給予whOpt.funGetUrl時才產生html暫存檔，預設'./_convertTemp'
  * @param {String} [whOpt.fdErr='./_convertTemp'] 輸入臨時儲存錯誤檔之資料夾位置字串，預設'./_convertTemp'

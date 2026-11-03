@@ -10,9 +10,10 @@ import { decodePng, pixelAt } from './tools/png.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
 import { isWindows } from './tools/child.mjs'
 import { getChromeExe } from './tools/chromeExe.mjs'
+import { makeTrace } from './tools/trace.mjs'
 
 
-//D-11: Server之安全面(帳本R12, R13, R14); 埠9022-9026
+//D-11: Server之安全面(帳本R12, R13, R14, R18); 埠9022-9028
 
 
 let fdCase = path.resolve('./test/_tmp/api-WHc2pngServerSecurity')
@@ -210,6 +211,59 @@ describe(`api-WHc2pngServerSecurity`, function() {
             assert.ok(r.j.err, `expect launch failure with server-side executablePath, got ${JSON.stringify(r.j).slice(0, 200)}`)
             assert.deepStrictEqual(r.j.ignoredWhOpt, ['executablePath'])
             assert.ok(listFiles(fdErrSrv).length >= 1, 'server-side writeError/fdErr not applied')
+        }
+        finally {
+            await server.stop()
+        }
+    })
+
+    //R18/R12: timeout涉及行程處置(逾時會關閉乃至結束該次所用之常駐瀏覽器, 並牽連同用之並發請求), 不在請求端白名單; 只能由伺服器端opt.whOpt提供
+    //此案: 請求端不得「放寬」伺服器端之時限 -- 伺服器端timeout為1ms, 請求端給60000須被忽略, 仍以1ms逾時(若timeout被加入白名單, 請求端之60000會覆蓋而正常回圖, 本案即紅)
+    it(`should not let request whOpt.timeout override the server-side timeout `, async function() {
+        if (!isWindows()) {
+            this.skip()
+        }
+        let port = 9027
+        let tr = makeTrace()
+        let server = await WHc2pngServer({ port, whOpt: { timeout: 1, retry: 1, onTrace: tr.onTrace } })
+        try {
+            let r = await post(port, { width: 300, height: 200, scale: 1, opt, whOpt: { timeout: 60000 } })
+            assert.ok(typeof r.j.err === 'string' && /^timeout\[1ms\] in /.test(r.j.err), `expect server-side timeout[1ms], got ${JSON.stringify(r.j).slice(0, 200)}`)
+            assert.strict.equal(r.j.b64, undefined)
+            assert.deepStrictEqual(r.j.ignoredWhOpt, ['timeout'])
+
+            //w-html2png收到之timeout為伺服器端之1, 不是請求端之60000
+            let attempts = tr.ofType('attempt')
+            assert.strict.equal(attempts.length, 1, 'expect exactly 1 attempt event (server-side retry: 1)')
+            assert.strict.equal(attempts[0].timeout, 1)
+
+            //逾時時瀏覽器尚在啟動, 等其啟動完成後於背景關閉之事件, 使本案不留殘留行程
+            await tr.wait('browser-close')
+        }
+        finally {
+            await server.stop()
+        }
+    })
+
+    //R18/R12: 伺服器端opt.whOpt.timeout生效(到達w-html2png), 且請求端不得「收緊」: 請求端給1須被忽略, 仍以伺服器端之60000正常回圖並列入ignoredWhOpt
+    //(請求端可令共用之常駐瀏覽器逾時而被關閉, 牽連他人並發請求; 若timeout被加入白名單, 請求端之1會覆蓋而逾時, 本案即紅)
+    it(`should apply server-side timeout and not let request whOpt.timeout shorten it `, async function() {
+        if (!isWindows()) {
+            this.skip()
+        }
+        let port = 9028
+        let tr = makeTrace()
+        let server = await WHc2pngServer({ port, whOpt: { timeout: 60000, retry: 1, onTrace: tr.onTrace } })
+        try {
+            let r = await post(port, { width: 300, height: 200, scale: 1, opt, whOpt: { timeout: 1 } })
+            assertChartPng(b64ToBuf(r.j), { width: 300, height: 200, minNonWhite: 2000, name: 'api-security-timeout' })
+            assert.deepStrictEqual(r.j.ignoredWhOpt, ['timeout'])
+
+            //伺服器端之timeout(60000)確實到達w-html2png, 且未逾時
+            let attempts = tr.ofType('attempt')
+            assert.strict.equal(attempts.length, 1, 'expect exactly 1 attempt event')
+            assert.strict.equal(attempts[0].timeout, 60000)
+            assert.strict.equal(tr.ofType('timeout').length, 0, 'unexpected timeout event')
         }
         finally {
             await server.stop()

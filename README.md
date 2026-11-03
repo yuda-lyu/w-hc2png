@@ -150,6 +150,15 @@ testb()
 
 ```
 
+#### Time limit for one drawing (`whOpt.timeout`):
+`whOpt` is passed through to `w-html2png` as a whole, so its `opt.timeout` (milliseconds allowed for each attempt) and `opt.onTrace` (observation callback) can be given in `whOpt`. Without `timeout` nothing changes (no time limit). See `w-html2png` for the full semantics (what happens to the browser when an attempt times out, the extra time the clean-up may take, and the events passed to `onTrace`).
+```alias
+import WHc2png from 'w-hc2png'
+
+// each attempt is allowed 30 seconds; a stuck attempt rejects with 'timeout[30000ms] in <step>' and is retried according to retry
+let b64 = await WHc2png(500, 400, 3, opt, { mode: 'alive', retry: 3, timeout: 30000 })
+```
+
 #### Example for Server:
 > **Link:** [[dev source code](https://github.com/yuda-lyu/w-hc2png/blob/master/srv.mjs)]
 ```alias
@@ -160,7 +169,7 @@ let opt = {
     apiName: 'api',
     // host: 'localhost', //default 'localhost' (loopback only); use '0.0.0.0' to accept remote connections
     // cors: true, //default true (any web page may call the API cross-origin); set false or a Hapi cors object to restrict
-    // whOpt: { executablePath: '...', retry: 3, writeError: false, fdErr: './_convertTemp' }, //server-side drawing options
+    // whOpt: { executablePath: '...', retry: 3, timeout: 30000, writeError: false, fdErr: './_convertTemp' }, //server-side drawing options
 }
 WHc2pngServer(opt)
 
@@ -219,7 +228,7 @@ plus ignoredWhOpt: [...] when the request whOpt contains keys that are not accep
 - The server binds to `localhost` by default. Exposing it (`host: '0.0.0.0'`) is only recommended behind a gateway/reverse proxy that restricts who can call it.
 - `opt` given as a string, and `whOpt.execJsHead` / `whOpt.execJsPost`, are JavaScript executed in a Chrome launched with `--no-sandbox`. This is inherent to the feature: anyone who can call the API can run arbitrary JavaScript in that browser.
 - `cors` defaults to `true`, so any web page opened by a user on the same machine/network can call the API from the browser. Set `cors: false` (or a Hapi cors object with specific origins) when cross-origin calls are not needed.
-- From the request, `whOpt` only accepts `mode`, `scriptsHead`, `stylesHead`, `execJsHead`, `execJsPost`. Settings that involve paths, processes or file writes (such as `executablePath`, `modeHeadless`, `retry`, `writeError`, `fdHtml`, `fdErr`) are ignored and listed in the response field `ignoredWhOpt`; provide them on the server side via `WHc2pngServer({ whOpt })`.
+- From the request, `whOpt` only accepts `mode`, `scriptsHead`, `stylesHead`, `execJsHead`, `execJsPost`. Settings that involve paths, processes or file writes (such as `executablePath`, `modeHeadless`, `retry`, `timeout`, `writeError`, `fdHtml`, `fdErr`) are ignored and listed in the response field `ignoredWhOpt`; provide them on the server side via `WHc2pngServer({ whOpt })`. `timeout` is ignored from the request because an attempt that times out may close (or force-kill) the resident browser shared by all requests, failing the concurrent ones; the server-side `whOpt.timeout` cannot be lengthened or shortened by a request.
 
 ## Breaking changes
 

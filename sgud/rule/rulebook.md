@@ -77,7 +77,7 @@
 
 ### R12 Server 請求端 `whOpt` 白名單(裁示 D-11①)
 
-- 規則:請求端 `whOpt` 只採白名單鍵 `mode`、`scriptsHead`、`stylesHead`、`execJsHead`、`execJsPost`;其餘(含 `executablePath`、`modeHeadless`、`retry`、`writeError`、`fdHtml`、`fdErr`、`fdPng`、`fdProfile`、`funGetUrl`、`funPageWait`)一律忽略,於 log 與回應之 `ignoredWhOpt` 註明。涉及路徑、行程、寫檔之設定只能由伺服器端建構參數 `opt.whOpt` 提供;請求端白名單鍵覆蓋伺服器端同名鍵。
+- 規則:請求端 `whOpt` 只採白名單鍵 `mode`、`scriptsHead`、`stylesHead`、`execJsHead`、`execJsPost`;其餘(含 `executablePath`、`modeHeadless`、`retry`、`timeout`〔R18〕、`writeError`、`fdHtml`、`fdErr`、`fdPng`、`fdProfile`、`funGetUrl`、`funPageWait`)一律忽略,於 log 與回應之 `ignoredWhOpt` 註明。涉及路徑、行程、寫檔之設定只能由伺服器端建構參數 `opt.whOpt` 提供;請求端白名單鍵覆蓋伺服器端同名鍵。
 - 站點:`src/WHc2pngServer.mjs`。
 - 測試:`test/api-WHc2pngServerSecurity.test.mjs`(請求端給 `executablePath` 不採用、給 `writeError`+`fdErr` 不寫檔、回應列出被忽略之鍵;伺服器端 `whOpt` 生效)。
 
@@ -102,6 +102,7 @@
 - 測試檔一律 `test/*.test.mjs` 並以 `unit-`/`api-` 前綴分層(裁示 D-6);輔助工具放 `test/tools/`;暫存放 `test/_tmp/<案名>/` 並於 `after` 清除;埠沿用 9021,新增 9022–9039。
 - 2026-10-31(w-html2png 1.0.57、wsemi 1.9.33 後):全套 `npm test` 37 passing(33 + R17 新增 4)。
 - 2026-11-02(toolg 改回 dspec 標準寫法、測試改以副本並指定 cwd 執行 toolg 腳本後):全套 38 passing(`unit-buildScript` 5→4、`unit-dist` 7→9、其餘不變)。
+- 2026-11-03(w-html2png 1.0.65、R18 新增 6 案後):全套 44 passing(`unit-whOptTimeout` 4、`api-WHc2pngServerSecurity` +2;埠新增 9027、9028)。
 
 ### R17 對 w-html2png 一律走公開入口(2026-10-31,主控排程第 182 項)
 
@@ -110,6 +111,18 @@
 - 盤點:Grep `['"`]w-html2png/` 於 `src/ test/ toolg/` 與根目錄 `*.mjs`(0 筆為已套);已由 `test/unit-publicEntry.test.mjs` 自動盤點。
 - 範圍:只含 w-html2png。`wsemi/src/*.mjs`、`w-package-tools/src/*.mjs` 之逐檔匯入(`src/` 10 處、`toolg/` 6 處)為既有慣用法,本輪未改亦未盤點其公開契約。
 - 測試:`test/unit-publicEntry.test.mjs`(掃描器以 fixture 驗正反例、實際檔案 0 筆、公開入口提供 `ensureBins`、取得之 chrome.exe 為組內帶版本者);`unit-dist`、`unit-hcResolve`、`api-WHc2pngServerSecurity` 之 `before` 經 `getChromeExe`。
+
+### R18 `whOpt` 整包轉傳至 w-html2png;`timeout`/`onTrace` 為轉傳鍵,`timeout` 不在 Server 請求端白名單(2026-11-03,Gitea #61;w-html2png 1.0.65 起)
+
+- 規則:
+  1. `WHc2png` 對 `whOpt` 不挑選、不改寫、不加預設值,除自行擴充之 `execJsHead`/`execJsPost` 外整包傳給 `WHtml2png`(單一呼叫處);故 w-html2png 新增之選項(1.0.65 起 `opt.timeout`〔每次嘗試之允許時長,毫秒〕、`opt.onTrace`〔觀察回調〕)不必改程式即生效。語意以 w-html2png 之說明為準,本套件 JSDoc/README 只轉述並指向之,不另立語意。
+  2. 轉傳須有測試守住,且以「值確實到達 w-html2png」為斷言(經 `onTrace` 之 `attempt` 事件的 `timeout` 欄位),不以耗時或出圖結果推斷:`timeout: 60000` 時被轉傳與被丟棄皆正常回圖,單看結果分辨不出。未給時 `attempt.timeout` 為 `null`(不得自行加入預設時限)。
+  3. Server 請求端白名單(R12)**不含** `timeout`:逾時會關閉乃至強制結束該次所用之瀏覽器,服務預設為跨 request 共用之 alive 常駐瀏覽器,關閉時並發中之其他 request 會失敗(w-html2png README〈單次出圖之允許時長〉瀏覽器層),屬行程類設定(同 `retry`、`executablePath`);若開放,請求端可給極大值取消伺服器端之時限,或給極小值使共用瀏覽器反覆被關閉。只能由伺服器端 `opt.whOpt.timeout` 提供;請求端給了被忽略並列入 `ignoredWhOpt`,雙向皆測(不得放寬亦不得收緊伺服器端之值)。`onTrace` 為函數,無法經 JSON/JSON5 傳入,亦不在白名單。
+- 站點:`src/WHc2png.mjs:319`(轉傳呼叫處)、`:67-68`(JSDoc);`src/WHc2pngServer.mjs:18`(白名單,上方註解載明 `timeout` 不在列之理由)、JSDoc 兩處。
+- 盤點:Grep `await WHtml2png\(` 於 `src/`(1 筆,第 5 參數為整包 `whOpt`);Grep `keysWhOptReq =` 於 `src/WHc2pngServer.mjs`(不含 `timeout`、`onTrace`)。
+- 測試:`test/unit-whOptTimeout.test.mjs`(#61 第 2 節兩項、single 模式、未給時 `attempt.timeout===null`)、`test/api-WHc2pngServerSecurity.test.mjs`(請求端 `timeout` 既不能放寬〔伺服器端 1ms、請求端 60000 → 仍逾時〕也不能收緊〔伺服器端 60000、請求端 1 → 仍回圖〕,皆列入 `ignoredWhOpt`)。輔助 `test/tools/trace.mjs`(`makeTrace`:收集 `onTrace` 事件與 `wait(type, n)` 事件同步)。
+- 變異(2026-11-03,於副本,全數被擊殺):轉傳前刪 `timeout`、改鍵名、乘 2、刪 `onTrace`、未給時加預設時限、Server 白名單加 `timeout`、Server 丟棄伺服器端 `timeout`。
+- 依賴:`package.json` 之 `w-html2png` 須 ≥ 1.0.65(`^1.0.65`)。
 
 ## 2. 測試檔對照
 
@@ -121,8 +134,10 @@
 | `test/unit-hcResolve.test.mjs` | unit | R4、R5、R17(同上) |
 | `test/unit-buildScript.test.mjs` | unit | R3 |
 | `test/unit-inject.test.mjs` | unit | R7、R8 |
-| `test/api-WHc2pngServerSecurity.test.mjs` | api(埠 9022–9026) | R12、R13、R14、R17(`before` 取 chrome 路徑) |
+| `test/api-WHc2pngServerSecurity.test.mjs` | api(埠 9022–9028) | R12、R13、R14、R17(`before` 取 chrome 路徑)、R18(請求端 `timeout` 不放寬亦不收緊,埠 9027、9028) |
+| `test/unit-whOptTimeout.test.mjs` | unit(真 Chrome,Windows;非 Windows `skip`) | R18 |
 | `test/unit-publicEntry.test.mjs` | unit | R17 |
+| `test/tools/trace.mjs` | 輔助(非測試檔) | R18(`makeTrace`:`onTrace` 事件收集與事件同步) |
 | `test/tools/chromeExe.mjs` | 輔助(非測試檔) | R17(`getChromeExe`) |
 | `test/tools/buildCopy.mjs` | 輔助(非測試檔) | R1、R2、R3、R5(`makeBuildCopy`/`runToolg`:副本並指定 cwd 執行 toolg 腳本,dspec 規則 4) |
 
@@ -139,12 +154,13 @@
 | R7 | 已套(執行碼 0 處);刻意不套:`src/WHc2png.mjs:82` 為 JSDoc 範例之 `h.replace('{b64}', b64)`(b64 不含 `$`,屬使用者端示範碼) | — |
 | R8 | 已套 | `src/WHc2png.mjs:252-257` |
 | R11 | 刻意不套於 API(待 w-html2png 第 29 項);測試已斷言非空白 | — |
-| R12 | 已套 | `src/WHc2pngServer.mjs:16`(白名單)、`:79-82`(伺服器端 whOpt)、`:133-146`(過濾與記錄)、`:160-163`、`:177-180`(回應 `ignoredWhOpt`) |
-| R13 | 已套 | `src/WHc2pngServer.mjs:67-70`、`:196` |
-| R14 | 已套 | `src/WHc2pngServer.mjs:73-76`、`:198` |
+| R12 | 已套 | `src/WHc2pngServer.mjs:18`(白名單)、`:81-84`(伺服器端 whOpt)、`:135-148`(過濾與記錄)、`:162-165`、`:179-182`(回應 `ignoredWhOpt`) |
+| R13 | 已套 | `src/WHc2pngServer.mjs:69-72`、`:198` |
+| R14 | 已套 | `src/WHc2pngServer.mjs:75-78`、`:200` |
 | R15 | 已套 | `README.md`〈Server security notes〉;`src/WHc2pngServer.mjs` JSDoc |
 | R16 | 已套 | `package.json:16` |
 | R17 | 已套(對 w-html2png 之深層匯入 0 處) | `test/tools/chromeExe.mjs`(唯一取 chrome 路徑處,`import WHtml2png from 'w-html2png'`)、`test/unit-dist.test.mjs`、`test/unit-hcResolve.test.mjs`、`test/api-WHc2pngServerSecurity.test.mjs` 之 `before`;`src/WHc2png.mjs:8` |
+| R18 | 已套 | `src/WHc2png.mjs:319`(整包轉傳)、`:67-68`(JSDoc);`src/WHc2pngServer.mjs:18`(白名單不含 `timeout`) |
 
 ## 3. 已知限制(文件化)
 
