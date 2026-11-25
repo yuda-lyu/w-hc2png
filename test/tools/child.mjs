@@ -18,7 +18,7 @@ function runNode(args, opt = {}) {
     let { cwd = fdRepo, env = {}, timeoutMs = 170 * 1000 } = opt
     return new Promise((resolve) => {
         let t0 = Date.now()
-        let cp = spawn(process.execPath, args, { cwd, env: { ...process.env, ...env } })
+        let cp = spawn(process.execPath, args, { cwd, env: { ...process.env, ...env }, windowsHide: true })
         let out = ''
         cp.stdout.on('data', (d) => {
             out += d
@@ -31,7 +31,7 @@ function runNode(args, opt = {}) {
             killed = true
             try {
                 if (isWindows()) {
-                    execSync(`taskkill /F /T /PID ${cp.pid}`, { stdio: 'ignore' })
+                    execSync(`taskkill /F /T /PID ${cp.pid}`, { stdio: 'ignore', windowsHide: true })
                 }
                 else {
                     cp.kill('SIGKILL')

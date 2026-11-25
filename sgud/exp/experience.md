@@ -6,7 +6,7 @@
 
 - **npm 12 預設封鎖相依套件之 postinstall**:新裝後 `node_modules/w-html2png/chrome/` 不存在,免安裝 Chrome 於第一次出圖時才下載(約 200MB、本機約 24 秒)。此時直接跑 `npm test`(`--parallel`)會因兩個 worker 同時下載而撞檔(`ENOENT ... portable.zip.00N.download`),4 案全敗。對策:先以單一行程出一次圖(或呼叫 `WHtml2png.ensureBins()`;`w-html2png/src/autoDownloadFiles.mjs` 於 1.0.57 已移除)把 Chrome 下載好再跑測試;根因在 w-html2png;**w-html2png 1.0.54 起已修(多行程同時首次使用只下載一份),此段僅適用 ≤1.0.53**。
 - **既有測試以 base64 逐位元比對 2025-07-03 之基準**(`test/test-scl{a,b}.b64`):本機穩態 4/4 失敗,差異只在標題文字反鋸齒 9 像素(最大通道差 9);同機重複出圖逐位元一致。未經授權不得重產基準圖;改法見審計回應 R6/T-d。
-- 機上常有他方之 `C:\Users\semi\AppData\Local\ms-playwright\chromium_headless_shell-*` 行程,非本套件所啟,勿殺;本套件之 Chrome 路徑(w-html2png ≤1.0.56)為 `node_modules/w-html2png/chrome/portable/App/Chrome-bin/138.0.7204.97/chrome.exe`;**1.0.57 起**改為 `node_modules/w-html2png/bin-cache/<組識別>/portable/App/Chrome-bin/<版本>/chrome.exe`(`WHtml2png.ensureBins()` 取得,與 cwd 無關;組根層之 `Chrome-bin/chrome.exe` 為啟動器,測試明給 `executablePath` 時不取它),見下方〈w-html2png 1.0.57〉。
+- 機上常有他方之使用者目錄下 `ms-playwright\chromium_headless_shell-*` 行程,非本套件所啟,勿殺;本套件之 Chrome 路徑(w-html2png ≤1.0.56)為 `node_modules/w-html2png/chrome/portable/App/Chrome-bin/138.0.7204.97/chrome.exe`;**1.0.57 起**改為 `node_modules/w-html2png/bin-cache/<組識別>/portable/App/Chrome-bin/<版本>/chrome.exe`(`WHtml2png.ensureBins()` 取得,與 cwd 無關;組根層之 `Chrome-bin/chrome.exe` 為啟動器,測試明給 `executablePath` 時不取它),見下方〈w-html2png 1.0.57〉。
 - 對含 `node_modules` 之 `./tmp` 跑 `du -sh` 會超過 120 秒,勿用。
 
 ## 打包(dist)
@@ -62,12 +62,22 @@
 
 - **事故形狀**:依賴升版清空 `node_modules/w-html2png/bin-cache` 後 `mocha --parallel` 各檔各自取 Chrome(約 402 MB),互搶頻寬,hook/案之 180 秒不足而 7 案逾時;3 檔未給 `executablePath`,是出圖時**隱式**取得(只改 `chromeExe.mjs` 涵蓋不到),須各檔 `before` 先備妥。
 - **本機網路下載很快(單程序約 30 秒),真 180 秒逾時不易重現**:修前紅以縮小時限重現——清空快取後 `npx mocha --parallel "test/*.test.mjs" --timeout 60000`,舊測試 20 passing / 7 failing(4 處明給 + 3 處隱式),同指令修後 70 passing。修前後都要先清空快取;紅燈那輪結束後快取仍完整(下載行程未被殺),不必另清,但下一輪驗收前仍要清。
-- **升級本套件之 wsemi 不會讓 w-html2png 內部取得帶鎖**:w-html2png 1.0.94 之 `dist/w-html2png.umd.js` 內嵌打包舊版 `fsEnsureBins`(`lock-wait` 0 處);只升 wsemi 並集中取得時,實測清空快取後 6 個行程各下載 8 檔(48 次 `download` 事件、0 次 `lock-wait`),全套仍綠(下載夠快)——**全綠不證明只下載一次**,須看事件。對自有套件之依賴,先 Grep 其 `dist` 是否內嵌所需版本之功能,不要只看 `npm ls` 之去重結果。因此 `ensureChromeBins` 先以本套件之 wsemi(帶鎖)依 w-html2png 之清單 seed,再經公開入口取路徑。
+- **升級本套件之 wsemi 不會讓 w-html2png 內部取得帶鎖**:w-html2png 1.0.94 之 `dist/w-html2png.umd.js` 內嵌打包舊版 `fsEnsureBins`(`lock-wait` 0 處);只升 wsemi 並集中取得時,實測清空快取後 6 個行程各下載 8 檔(48 次 `download` 事件、0 次 `lock-wait`),全套仍綠(下載夠快)——**全綠不證明只下載一次**,須看事件。對自有套件之依賴,先 Grep 其 `dist` 是否內嵌所需版本之功能,不要只看 `npm ls` 之去重結果。當時因此 `ensureChromeBins` 先以本套件之 wsemi(帶鎖)依 w-html2png 之清單 seed,再經公開入口取路徑(**第 633 項已移除 seed**:w-html2png 1.0.95 起以 wsemi 1.9.76 建置,公開入口即帶鎖,見下一小節〈移除 seed、預算改由函數求得〉)。
 - **事件驗收**:`W_HC2PNG_CHROME_TRACE=<檔>` 令 `chromeExe.mjs` 把 `onTrace`/`onProgress` 事件逐列寫檔(含 pid),`test/tools/chromeTrace.mjs` 判讀。實測(清空快取、`npm test`):1 個 pid 下載 8 檔(各 1 次)、`publish placed` 1 次、5 個 pid 出現 `lock-wait start` 且皆 `end hit:true`。事件之 `onProgress` `wait` 帶 `pid`(持有者)會蓋掉本行程 pid,寫檔時另存為 `evPid`。
 - **`this.timeout(n)` 於執行中之 hook 會重設計時**(mocha `Runnable#timeout` 有計時器即 `resetTimeout`),故 `getChromeExe(this)` 不必放在 hook 第一行;但仍以呼叫處為準,hook 內其他步驟另受該時限。取得時限用 `ctx.timeout(CHROME_BUDGET_MS)` 覆寫該 hook,不放寬 `--timeout 180000`,其餘案不長。
-- **預算常數推導**:wsemi `lockBudget` = 下載次數 × `totalMs` + 解壓批數 × (`totalMs` + 5 秒) + min(`totalMs`, 60 秒);`totalMs` 已含 `maxAttempts` 重試,故不再相乘。chrome 組:1 個壓縮檔 8 分割、107 個成員路徑共 6157 字元(每批至多 6000 字元 ⇒ 2 批,另留 1 批餘裕)。
+- **預算常數推導(第 632 項之舊作法,第 633 項已由函數取代)**:wsemi `lockBudget` = 下載次數 × `totalMs` + 解壓批數 × (`totalMs` + 5 秒) + min(`totalMs`, 60 秒);`totalMs` 已含 `maxAttempts` 重試,故不再相乘。chrome 組:1 個壓縮檔 8 分割、107 個成員路徑共 6157 字元(每批至多 6000 字元 ⇒ 2 批)。測試端自寫此算式並多留 1 批餘裕(3 批,3,375,000 ms),且 `totalMs` 明給 300000 短於 wsemi 預設 600000;改用 `fsEnsureBinsBudget` 後兩者皆消失(實值 6,070,000,兩倍 12,140,000)。
 - **接線測試**:站點全集不手列,自檔案系統掃 `test/*.test.mjs` 是否用 Chrome(`WHc2png(`、`WHc2pngServer(`、`fpChildDraw`、`fpChildDual`)並逐檔斷言於 `before` 內 `await getChromeExe(this)`;掃描器本身以正反例自測。漏傳 `this` 於所有平台皆拋錯(非 Windows 亦驗)。27 項變異(含接線、預算、seed 順序與失敗不續行、掃描器與判讀器)全擊殺。獨立複審另抓到:掃描器須先去註解(否則註解中之字樣使接線案誤過)、站點全集除呼叫外須含匯入出圖入口者、事件判讀須判 `lock-skip` 與取得中被終止之行程、測試自己不得清掉外部驗收設定之環境變數(存舊值、finally 還原)、取得放 hook 首句使該 hook 時限整段適用。
 - **清空快取之作法**:先 `lstat` 逐項確認 `bin-cache` 下無目錄連結再 `fs.rmSync`,刪後回驗不存在;腳本放 `./tmp/`。
+
+### 移除 seed、預算改由函數求得(2026-11-25,主控排程第 633 項;帳本 R19)
+
+- **移除前先確認擁有者套件之 `main` 已帶鎖**:`node_modules/w-html2png/dist/w-html2png.umd.js` 含 `lock-wait` 才能移除 seed;`npm pack w-html2png@<舊版>` 以相對路徑解開其 `dist` 即可對照(1.0.94 無、1.0.95 有)。守門寫成測試(`unit-chromeAcquire`),擁有者日後以舊 wsemi 重建即轉紅。
+- **「修前紅」對行為不變之重構有侷限**:seed 與公開入口帶鎖兩條路徑行為相同,「只下載一次」之案對改前之測試端程式碼不會紅;能紅者是結構與預算案(無 seed、倍數、實清單預算、每檔上限)。鎖之存在改以對舊 `dist` 之變異證明鑑別力。對改前程式紅綠對照之作法:把改前檔複製到 `./tmp/<案名>/red/test/tools/`,在檔尾以新名稱補墊片(改前之值,如倍數 1、`totalMs` 300000),新測試檔照樣載入,逐案看哪些轉紅;副本在 repo 內,裸名匯入往上解析到 repo 之 `node_modules`,不需目錄連結。
+- **預算與取得須同一份選項**:`CHROME_ACQUIRE_OPT` 同時展開於 `fsEnsureBinsBudget` 與 `ensureBins`,取得端另加 `totalMs` 之變異由「只傳共用選項」案擊殺;「傳給下載之每檔上限不短於預設」以預算比較(取得端選項所得預算 ≥ 未給選項者)而非寫死 600000。
+- **變異副本之跑法(第 633 項,25 項)**:一支一次性腳本於 `./tmp/<案名>/mut/<變異id>/` 複製 `test/` 與 `package.json`(排除 `test/_tmp`),以字串替換套用變異(**錨點不存在或不唯一即拋錯**),在副本為 cwd 以 `node <repo>/node_modules/mocha/bin/mocha.js --no-parallel test/<檔>` 執行,先跑不變異之對照組;判定須有摘要行,且**被擊殺者須帶失敗案名**(只有失敗數而無案名多半是載入錯誤,如變異把 `async function` 改成 `async async function`,不算擊殺)。複審者提出之存活變異(`N_CHILD=1`、共用選項改 `stallMs`、預設公開入口改傳他物、取得函數退回同步、`before` 不設時限、預算寫死無鏡像)逐項補案後再跑。
+- **R17 掃描器會抓測試內之 `'w-html2png/…'` 字樣**:為求套件根而寫 `requireFrom.resolve('w-html2png/package.json')` 使 `unit-publicEntry` 紅 1 案;改以主檔位置之上一層(`dist` 之上)推套件根。全套首跑之紅燈即由此而來,單跑 `unit-chromeAcquire` 看不出,**改測試後須跑全套**。
+- **子行程並行取得案**(`childAcquire.mjs` × 3):快取已備妥時只能證明無下載與完整檔案組;清空快取後單跑該檔實測 3 個行程中 1 個下載 8 次、2 個 `lock-wait` 且 `hit:true`。`runNode` 原未設 `windowsHide`,新案起子行程前補上。
+- **清空快取之取證**:全套 `W_HC2PNG_CHROME_TRACE=./tmp/<檔> npm test`(`quiet-run --lock`)後,事件逐 pid 統計(download、lock-wait start/end/hit、publish placed、cache hit、settle)比只看 `judgeTrace` 摘要更能對上「幾個行程各做什麼」;腳本一次性放 `./tmp/`。
 
 ## 驗證手法
 

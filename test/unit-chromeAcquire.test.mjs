@@ -3,13 +3,15 @@ import path from 'path'
 import assert from 'assert'
 import { createRequire } from 'module'
 import { spawnSync } from 'child_process'
+import WHtml2png from 'w-html2png'
+import fsEnsureBinsBudget from 'wsemi/src/fsEnsureBinsBudget.mjs'
 import {
-    CHROME_TOTAL_MS,
-    CHROME_DOWNLOADS,
-    CHROME_EXTRACT_BATCHES,
-    CHROME_BUDGET_MS,
     MANIFEST_REL,
+    CHROME_PARALLEL_FACTOR,
+    CHROME_ACQUIRE_OPT,
+    CHROME_BUDGET_MS,
     chromeBudgetMs,
+    chromeBudgetNow,
     findPkgRoot,
     applyChromeBudget,
     ensureChromeBins,
@@ -18,15 +20,16 @@ import {
     getChromeExe
 } from './tools/chromeExe.mjs'
 import { parseTrace, readTrace, judgeTrace } from './tools/chromeTrace.mjs'
+import { isWindows, runNode } from './tools/child.mjs'
 
 
 //帳本R19: 測試取得w-html2png自帶chrome(約402MB)須集中、取得處時限對齊下載預算、跨程序只下載一次(平行時各檔不各自下載)
-//  (a) 唯一取得點為test/tools/chromeExe.mjs, 其他測試檔與工具不得呼叫WHtml2png.ensureBins或fsEnsureBins
+//  (a) 唯一取得點為test/tools/chromeExe.mjs, 其他測試檔與工具不得呼叫WHtml2png.ensureBins或fsEnsureBins; chromeExe.mjs自身只經公開入口WHtml2png.ensureBins取得, 不另以fsEnsureBins先行取得(無seed)
 //  (b) 凡使用chrome之測試檔(含未給executablePath、出圖時隱式取得者)於before呼叫getChromeExe(this)或getChromeInfo(this), 先於任何使用
-//  (c) 取得處之hook時限為CHROME_BUDGET_MS(自totalMs、下載次數、解壓批數推得), 不沿用--timeout 180000; 常數不低於w-html2png清單所需
-//  (d) 跨程序只下載一次由wsemi之fsEnsureBins跨程序鎖保證, 以onTrace事件驗收(W_HC2PNG_CHROME_TRACE與test/tools/chromeTrace.mjs), 不以耗時判斷
+//  (c) 取得處之hook時限為CHROME_BUDGET_MS = fsEnsureBinsBudget(依w-html2png之清單, 與取得同一份選項CHROME_ACQUIRE_OPT)×CHROME_PARALLEL_FACTOR(並行取兩倍), 不自寫算式, 不沿用--timeout 180000; 傳給下載之每檔上限不短於wsemi之預設
+//  (d) 跨程序只下載一次經公開入口即成立(w-html2png之dist內嵌帶鎖之wsemi fsEnsureBins): 本檔守門其dist含鎖之程式, 並以真實子行程並行經共用工具取得, 以onTrace事件(judgeTrace)判讀; 全套之驗收以W_HC2PNG_CHROME_TRACE與test/tools/chromeTrace.mjs為準, 不以耗時判斷
 //  (e) 不靠--require之全域前置, 不改scripts.test
-//本檔不下載chrome: 取得以替身驗證接線(時限先於取得、傳入totalMs與事件回調), 真實取得由其他測試檔之before實跑(接縫不用替身)
+//本檔之案不下載chrome, 唯一例外為下方「concurrent acquisition」: 子行程經共用工具取得(快取命中只校驗; 快取為空時由其中一方下載一次, 為只下載一次之實證); 其餘取得以替身驗證接線, 真實取得亦由其他測試檔之before實跑(接縫不用替身)
 
 
 let fdCase = path.resolve('./test/_tmp/unit-chromeAcquire')
@@ -45,8 +48,18 @@ function setEnv(v) {
     }
 }
 
-//wsemi fsEnsureBins之ARGS_CAP(每批解壓之成員參數總長上限字元, 內部值); 其調整時由CHROME_EXTRACT_BATCHES之1批餘裕吸收, 超出則下方守門轉紅
-const WSEMI_ARGS_CAP = 6000
+//合成清單(格式同wsemi fsEnsureBinsBudget之JSDoc範例): 1個直接檔(1次下載) + 1個壓縮檔(1次下載、1批解壓), T=1000、無鏡像、非離線時單一預算為2000+8000=10000, 設鏡像為3000+10000=13000
+const SYNTH_MANIFEST = {
+    schema: 1,
+    pkg: 'w-example',
+    mode: 'pinned',
+    repo: 'yuda-lyu/w-example',
+    commit: '0123456789abcdef0123456789abcdef01234567',
+    files: [
+        { name: 'tool.exe', path: 'bin/tool.exe', sha256: '40f576db36632cf550d7d99bd6599c88a131ba725f46b29a95ae2d5359bb9913', size: 7 },
+        { name: 'k6.exe', url: 'https://github.com/grafana/k6/releases/download/v1.0.0/k6-v1.zip', sha256: '0000000000000000000000000000000000000000000000000000000000000000', size: 100, extract: { type: 'zip', member: 'k6-v1/k6.exe', sha256: '1111111111111111111111111111111111111111111111111111111111111111', size: 50 } },
+    ],
+}
 
 
 //fakeCtx, 記錄timeout呼叫之mocha上下文替身
@@ -79,29 +92,29 @@ function geVer(a, b) {
 }
 
 
-//manifestNeeds, 依w-html2png之清單推算檔案組chrome於無鏡像時fsEnsureBins之下載次數與解壓批數(同wsemi lockBudget之計法)
-function manifestNeeds(manifest, bundleName) {
-    let b = manifest.bundles.find((v) => v.name === bundleName)
-    assert.ok(b, `bundle ${bundleName} not found in manifest`)
-    let downloads = (b.files || []).length //組內直接來源檔(自有檔或廠商網址)各下載1次
-    let batches = 0
+//readManifest, 讀w-html2png之清單(資料檔, 非程式; R17)
+function readManifest() {
+    return JSON.parse(fs.readFileSync(path.join(findPkgRoot('w-html2png'), MANIFEST_REL), 'utf8'))
+}
+
+
+//manifestChrome, 清單中檔案組chrome之組內成員數與下載次數(自有檔或廠商網址之直接來源各1次, 壓縮檔為分割數或1次; 無鏡像)
+function manifestChrome(manifest) {
+    let b = manifest.bundles.find((v) => v.name === 'chrome')
+    assert.ok(b, 'bundle chrome not found in manifest')
+    let members = (b.files || []).length
+    let downloads = (b.files || []).length
     for (let a of b.archives || []) {
+        members += a.extract.files.length
         downloads += Array.isArray(a.parts) ? a.parts.length : 1
-        let cur = 0
-        let len = 0
-        let n = 1
-        for (let m of a.extract.files) {
-            if (cur > 0 && len + m.path.length + 1 > WSEMI_ARGS_CAP) {
-                n++
-                cur = 0
-                len = 0
-            }
-            cur++
-            len += m.path.length + 1
-        }
-        batches += n
     }
-    return { downloads, batches }
+    return { members, downloads }
+}
+
+
+//carriesLock, 公開入口(w-html2png之main, 其內嵌取得函式)之程式是否含wsemi fsEnsureBins之跨程序鎖(以其'lock-wait'事件為記)
+function carriesLock(text) {
+    return String(text).includes('lock-wait')
 }
 
 
@@ -170,15 +183,15 @@ describe(`unit-chromeAcquire`, function() {
             }
         })
 
-        //R19(c): 時限先於取得; 取得時明給totalMs(使預算之推算不隨wsemi預設值漂移); 結果原樣回傳
-        it(`should set the timeout before acquiring and pass totalMs to ensureBins `, async function() {
-            setEnv(undefined) //未啟用事件記錄: 不傳回調
+        //R19(c): 時限先於取得; 取得時之選項只有CHROME_ACQUIRE_OPT加事件回調(預算與取得同一份選項, 不得只在取得端另加totalMs等影響預算之鍵); 結果原樣回傳
+        it(`should set the timeout before acquiring and pass only the shared options to ensureBins `, async function() {
+            setEnv(undefined) //未啟用事件記錄: 回調為undefined
             let log = []
             let ret = { chrome: 'x' }
             let r = null
             try {
                 r = await acquireChrome(fakeCtx(log), async (o) => {
-                    log.push({ call: 'ensure', totalMs: o.totalMs, onTrace: typeof o.onTrace, onProgress: typeof o.onProgress })
+                    log.push({ call: 'ensure', opt: o })
                     return ret
                 })
             }
@@ -188,85 +201,222 @@ describe(`unit-chromeAcquire`, function() {
             assert.strict.equal(r, ret)
             assert.deepStrictEqual(log, [
                 { call: 'timeout', ms: CHROME_BUDGET_MS },
-                { call: 'ensure', totalMs: CHROME_TOTAL_MS, onTrace: 'undefined', onProgress: 'undefined' },
+                { call: 'ensure', opt: { ...CHROME_ACQUIRE_OPT, onTrace: undefined, onProgress: undefined } },
             ])
         })
 
-        //R19(c): 常數不低於w-html2png清單所需(清單改為更多分割或成員時轉紅, 提醒重估); 預算不低於wsemi跨程序鎖之持有/等候上限推算值
-        it(`should not underestimate the downloads and extract batches of the w-html2png manifest `, function() {
-            let fpManifest = path.join(findPkgRoot('w-html2png'), MANIFEST_REL)
-            let need = manifestNeeds(JSON.parse(fs.readFileSync(fpManifest, 'utf8')), 'chrome')
-            assert.ok(need.downloads >= 1 && need.batches >= 1, `manifest needs ${JSON.stringify(need)}`)
-            assert.ok(CHROME_DOWNLOADS >= need.downloads, `CHROME_DOWNLOADS ${CHROME_DOWNLOADS} < manifest downloads ${need.downloads}`)
-            assert.ok(CHROME_EXTRACT_BATCHES >= need.batches, `CHROME_EXTRACT_BATCHES ${CHROME_EXTRACT_BATCHES} < manifest batches ${need.batches}`)
-            assert.ok(CHROME_BUDGET_MS >= chromeBudgetMs(CHROME_TOTAL_MS, need.downloads, need.batches), 'budget below the derived lock budget')
+        //R19(c)/規格E5-3: 預算 = wsemi fsEnsureBinsBudget(單一取得預算, 與鎖之上限同一算式) × CHROME_PARALLEL_FACTOR(並行取兩倍); 清單與選項(totalMs、鏡像)皆傳入該函數, 不自寫算式
+        it(`should derive the budget from fsEnsureBinsBudget times the parallel factor `, function() {
+            //規格: 並行時最壞要先等他方一個預算、他方失敗才自行取得一個預算, 取兩倍(literal 2, 不引用被測之常數以免自我參照)
+            assert.strict.equal(CHROME_PARALLEL_FACTOR, 2)
+            let base = { pkgRoot: '.', offline: false }
+            //不同之選項(T、鏡像、預設)皆須與「兩倍 × wsemi預算函數」逐位相同(不含wsemi內部常數之字面值, 內部值改變時不使本案誤紅)
+            let opts = [{ ...base, mirror: '', totalMs: 1000 }, { ...base, mirror: './mirror', totalMs: 1000 }, { ...base, mirror: './mirror', totalMs: 2500 }, { ...base, mirror: '' }]
+            for (let opt of opts) {
+                assert.strict.equal(chromeBudgetMs(SYNTH_MANIFEST, opt), 2 * fsEnsureBinsBudget(SYNTH_MANIFEST, opt))
+            }
+            //選項確實傳入預算函數(漏傳則下列各組同值): 給定totalMs與預設不同、有無鏡像不同、totalMs不同者不同
+            let vals = opts.map((opt) => chromeBudgetMs(SYNTH_MANIFEST, opt))
+            assert.strict.equal(new Set(vals).size, opts.length, `options must change the budget: ${vals.join(',')}`)
         })
 
-        //R19(c): 預算公式之數值核對(同wsemi lockBudget: n×T + x×(T+5秒) + min(T, 60秒))
-        it(`should derive the budget as downloads*T + batches*(T+5s) + min(T,60s) `, function() {
-            assert.strict.equal(chromeBudgetMs(100000, 8, 2), 8 * 100000 + 2 * 105000 + 60000)
-            assert.strict.equal(chromeBudgetMs(30000, 1, 1), 30000 + 35000 + 30000)
+        //R19(c): 預算於呼叫當下讀環境變數(W_BIN_MIRROR設定時每個來源先試鏡像, 預算放大); 寫死不讀環境者(如固定無鏡像)轉紅
+        it(`should size the timeout from the mirror setting of the environment `, function() {
+            let old = process.env.W_BIN_MIRROR
+            try {
+                delete process.env.W_BIN_MIRROR
+                let plain = chromeBudgetNow()
+                process.env.W_BIN_MIRROR = fdCase
+                let mirrored = chromeBudgetNow()
+                assert.ok(mirrored > plain, `mirror setting must enlarge the budget: ${mirrored} <= ${plain}`)
+                assert.ok(mirrored < 2 ** 31 - 1, 'budget with a mirror must still fit the mocha timer limit')
+                delete process.env.W_BIN_MIRROR
+                assert.strict.equal(chromeBudgetNow(), plain)
+            }
+            finally {
+                if (old === undefined) {
+                    delete process.env.W_BIN_MIRROR
+                }
+                else {
+                    process.env.W_BIN_MIRROR = old
+                }
+            }
+        })
+
+        //R19(c): 實際之CHROME_BUDGET_MS依w-html2png之清單(其套件根與公開入口所依者同一)與CHROME_ACQUIRE_OPT, 以清單物件形式(工具用清單路徑形式, 輸入形式不同; 函數、選項、套件根共用)核對; 清單含檔案組chrome
+        it(`should size the hook timeout from the manifest of the package behind the public entry `, function() {
+            let root = findPkgRoot('w-html2png')
+            //公開入口之主檔位於<套件根>/dist/, 其上一層即其套件根(不深層匯入, R17)
+            assert.strict.equal(root, path.resolve(path.dirname(requireFrom.resolve('w-html2png')), '..'), 'budget manifest root differs from the package root of the public entry')
+            assert.strict.equal(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name, 'w-html2png')
+            let manifest = readManifest()
+            assert.strict.equal(manifest.pkg, 'w-html2png')
+            assert.ok(manifestChrome(manifest).downloads >= 1, 'bundle chrome has no download in the manifest')
+            let one = fsEnsureBinsBudget(manifest, { ...CHROME_ACQUIRE_OPT, pkgRoot: root })
+            assert.ok(one > 0, `single acquisition budget ${one}`)
+            assert.strict.equal(CHROME_BUDGET_MS, CHROME_PARALLEL_FACTOR * one)
+        })
+
+        //R19(c): 傳給下載之每檔上限不短於wsemi之預設(以預算比較: 取得端之選項所得預算不小於未給任何選項者; 給了較短之totalMs即轉紅)
+        it(`should not shorten the per-file download limit below the wsemi default `, function() {
+            let base = { pkgRoot: '.', mirror: '', offline: false }
+            let own = fsEnsureBinsBudget(SYNTH_MANIFEST, { ...base, ...CHROME_ACQUIRE_OPT })
+            let dflt = fsEnsureBinsBudget(SYNTH_MANIFEST, base)
+            assert.ok(own >= dflt, `acquire options give budget ${own} < default ${dflt}: a shorter totalMs was passed`)
+            //比較器本身: 較短之totalMs確實使預算變小(否則上列比較無鑑別力)
+            assert.ok(fsEnsureBinsBudget(SYNTH_MANIFEST, { ...base, totalMs: 1000 }) < dflt)
+            //共用選項維持空物件: 預算函數對本清單只計totalMs(stallMs只計主幹模式, maxAttempts已含於totalMs), 比較器看不出stallMs、maxAttempts等其餘時間類選項被縮短;
+            //須加鍵者先確認其對下載每檔上限之影響不短於wsemi預設, 並同步修改本斷言與帳本R19
+            assert.deepStrictEqual({ ...CHROME_ACQUIRE_OPT }, {}, 'CHROME_ACQUIRE_OPT must stay empty so that the wsemi defaults govern the download limits')
         })
 
     })
 
     describe(`cross-process single download`, function() {
 
-        //R19(d): 先以本套件之wsemi(帶跨程序鎖)依w-html2png之清單取得(seed), 再經公開入口取得路徑; 順序、清單、套件根、選項之傳遞
-        it(`should seed the cache with the lock before reading the paths through the public entry `, async function() {
-            let log = []
-            let r = await ensureChromeBins({ totalMs: 123, onTrace: 'T', onProgress: 'P' }, {
-                seed: async (mf, o) => {
-                    log.push({ call: 'seed', mf, pkgRoot: o.pkgRoot, totalMs: o.totalMs, onTrace: o.onTrace, onProgress: o.onProgress })
-                },
-                pub: async (o) => {
-                    log.push({ call: 'pub', totalMs: o.totalMs })
-                    return { chrome: 'dir' }
-                },
-                root: () => 'ROOT',
-            })
-            assert.deepStrictEqual(log, [
-                { call: 'seed', mf: MANIFEST_REL, pkgRoot: 'ROOT', totalMs: 123, onTrace: 'T', onProgress: 'P' },
-                { call: 'pub', totalMs: 123 },
-            ])
-            assert.deepStrictEqual(r, { chrome: 'dir' })
+        //R19(a): 取得只經公開入口, 無seed: 共用工具不匯入或呼叫wsemi之fsEnsureBins(取得單位之預算函數fsEnsureBinsBudget除外), 恰一處呼叫WHtml2png.ensureBins(
+        it(`should acquire only through the public entry without a seed step `, function() {
+            let code = stripComments(fs.readFileSync(path.join(fdTest, 'tools', 'chromeExe.mjs'), 'utf8'))
+            let seeds = code.split(/\r?\n/).filter((line) => /\bfsEnsureBins(?![A-Za-z0-9_])/.test(line))
+            assert.deepStrictEqual(seeds, [], `chromeExe.mjs must not import or call fsEnsureBins (no seed): ${seeds.join(' | ')}`)
+            let pubs = code.match(/WHtml2png\s*\.\s*ensureBins\s*\(/g) || []
+            assert.strict.equal(pubs.length, 1, `chromeExe.mjs must call WHtml2png.ensureBins( exactly once, found ${pubs.length}`)
+            //偵測器本身: 有匯入或呼叫fsEnsureBins之寫法被抓到, fsEnsureBinsBudget不被誤抓
+            for (let s of ['import fsEnsureBins from \'wsemi/src/fsEnsureBins.mjs\'', 'await fsEnsureBins(a, b)', 'let seed = fsEnsureBins']) {
+                assert.ok(/\bfsEnsureBins(?![A-Za-z0-9_])/.test(s), s)
+            }
+            assert.ok(!/\bfsEnsureBins(?![A-Za-z0-9_])/.test('import fsEnsureBinsBudget from \'wsemi/src/fsEnsureBinsBudget.mjs\''))
         })
 
-        //seed失敗(如E_LOCK_TIMEOUT、下載失敗)即拋出, 不進入公開入口之取得(其內嵌之取得無鎖, 不得於seed失敗後自行下載)
-        it(`should not go on to the public entry when the seed fails `, async function() {
-            let called = 0
-            let err = new Error('seed failed')
+        //R19(a)(d): ensureChromeBins把選項原樣交公開入口並回傳其結果(不先行取得、不加工)
+        it(`should hand the options to the public entry as they are and return its result `, async function() {
+            let log = []
+            let o = { onTrace: 'T', onProgress: 'P' }
+            let ret = { chrome: 'dir' }
+            let r = await ensureChromeBins(o, {
+                pub: async (x) => {
+                    log.push({ call: 'pub', same: x === o })
+                    return ret
+                },
+            })
+            assert.strict.equal(r, ret)
+            assert.deepStrictEqual(log, [{ call: 'pub', same: true }])
+        })
+
+        //R19(a): 預設之取得函數即真實公開入口WHtml2png.ensureBins(接縫不用替身之預設路徑): 暫以記錄用之函數取代該靜態屬性, 呼叫當下綁定, 收到的須是同一個選項物件
+        it(`should call the real public entry by default with the very same options object `, async function() {
+            let orig = WHtml2png.ensureBins
+            let got = []
+            let ret = { chrome: 'y' }
+            let o = { onTrace: 'T', onProgress: 'P' }
+            let r = null
+            WHtml2png.ensureBins = async (x) => {
+                got.push(x)
+                return ret
+            }
+            try {
+                r = await ensureChromeBins(o)
+            }
+            finally {
+                WHtml2png.ensureBins = orig
+            }
+            assert.strict.equal(typeof orig, 'function')
+            assert.strict.equal(WHtml2png.ensureBins, orig, 'the public entry must be restored')
+            assert.strict.equal(r, ret)
+            assert.strict.equal(got.length, 1)
+            assert.strict.equal(got[0], o)
+        })
+
+        //取得失敗(如E_LOCK_TIMEOUT、下載失敗)原樣拋出, 不吞、不改走他途、不重試(其內部已依選項重試)
+        it(`should pass the failure of the public entry through unchanged `, async function() {
+            let n = 0
+            let err = new Error('acquire failed')
             await assert.rejects(() => ensureChromeBins({}, {
-                seed: async () => {
+                pub: async () => {
+                    n++
                     throw err
                 },
-                pub: async () => {
-                    called++
-                    return {}
-                },
-                root: () => 'ROOT',
             }), (e) => e === err)
-            assert.strict.equal(called, 0)
+            assert.strict.equal(n, 1)
+            //取得函數同步拋錯亦以拒絕之Promise回傳(不使呼叫端收到同步例外)
+            let p = null
+            assert.doesNotThrow(() => {
+                p = ensureChromeBins({}, {
+                    pub: () => {
+                        throw err
+                    },
+                })
+            })
+            await assert.rejects(() => p, (e) => e === err)
         })
 
-        //seed之清單與套件根為w-html2png之實檔: 套件根之package.json名為w-html2png, 其清單存在且含檔案組chrome(與其預設快取位置相同, 故seed放入之快取即其公開入口所讀者)
-        it(`should point the seed at the package root and manifest of w-html2png `, function() {
-            let root = findPkgRoot('w-html2png')
-            assert.strict.equal(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name, 'w-html2png')
-            let manifest = JSON.parse(fs.readFileSync(path.join(root, MANIFEST_REL), 'utf8'))
-            assert.strict.equal(manifest.pkg, 'w-html2png')
-            assert.ok(manifest.bundles.some((b) => b.name === 'chrome'), 'bundle chrome not found in the manifest')
+        //R19(d): 公開入口(w-html2png之main)內嵌之取得函式須帶跨程序鎖(含'lock-wait'): 其dist以不帶鎖之wsemi建置時, 升級本套件之wsemi不使其內部取得帶鎖, 平行取得各自下載而全套仍綠
+        it(`should keep the cross-process lock in the code behind the public entry `, function() {
+            let text = fs.readFileSync(requireFrom.resolve('w-html2png'), 'utf8')
+            assert.ok(carriesLock(text), 'the main of w-html2png carries no cross-process lock (no lock-wait): rebuilt with an old wsemi, acquisitions would download once per process')
+            //判定器本身: 無該事件者為否
+            assert.strict.equal(carriesLock('emit({ type: \'download\' })'), false)
+            assert.strict.equal(carriesLock(''), false)
+            assert.strict.equal(carriesLock('emit({ type: \'lock-wait\' })'), true)
         })
 
-        //R19(d): 跨程序鎖來自wsemi 1.9.75之fsEnsureBins; 已安裝版本與package.json之宣告皆不得低於1.9.75, 且其原始碼含鎖(lock-wait事件)
-        it(`should use wsemi with the cross-process lock (>= 1.9.75) `, function() {
+        //預算函數fsEnsureBinsBudget自wsemi 1.9.76起提供; 已安裝版本與package.json之宣告皆不得低於之
+        it(`should use wsemi with the budget function (>= 1.9.76) `, function() {
             let fpWsemi = requireFrom.resolve('wsemi/package.json')
             let installed = JSON.parse(fs.readFileSync(fpWsemi, 'utf8')).version
-            assert.ok(geVer(installed, '1.9.75'), `installed wsemi ${installed} < 1.9.75`)
+            assert.ok(geVer(installed, '1.9.76'), `installed wsemi ${installed} < 1.9.76`)
             let declared = JSON.parse(fs.readFileSync(path.resolve('./package.json'), 'utf8')).dependencies.wsemi
-            assert.ok(geVer(declared, '1.9.75'), `declared wsemi ${declared} < 1.9.75`)
-            let src = fs.readFileSync(path.join(path.dirname(fpWsemi), 'src', 'fsEnsureBinsCore.mjs'), 'utf8')
-            assert.ok(src.includes('lock-wait'), 'installed wsemi fsEnsureBins has no cross-process lock')
+            assert.ok(geVer(declared, '1.9.76'), `declared wsemi ${declared} < 1.9.76`)
+            assert.strict.equal(typeof fsEnsureBinsBudget, 'function')
+        })
+
+    })
+
+    describe(`concurrent acquisition`, function() {
+
+        //並行之子行程數: 多於1即有等候者(需要跨程序鎖才只下載一次); 不求多(非負載試驗)
+        const N_CHILD = 3
+        let rs = []
+        let hookTimeout = null
+
+        //R19(b): 取得放在before且以預算為時限(子行程取得之等候與下載皆在此預算內); 非Windows無自帶chrome, 略過
+        before(async function() {
+            applyChromeBudget(this)
+            hookTimeout = this.timeout()
+            if (!isWindows()) {
+                this.skip()
+            }
+            let fpChild = path.join(fdTest, 'tools', 'childAcquire.mjs')
+            rs = await Promise.all(Array.from({ length: N_CHILD }, () => runNode([fpChild], { timeoutMs: CHROME_BUDGET_MS })))
+        })
+
+        //R19(d): 同時啟動之子行程經公開入口取得, 皆成功並得到完整檔案組(組內成員數同清單)
+        it(`should give every concurrent process the complete file set through the public entry `, function() {
+            let { members } = manifestChrome(readManifest())
+            assert.ok(rs.length >= 2, `at least two concurrent processes are needed to have a waiter, got ${rs.length}`)
+            assert.strict.equal(rs.length, N_CHILD)
+            assert.strict.equal(hookTimeout, CHROME_BUDGET_MS, 'the hook that waits for the children must carry the download budget as its timeout')
+            for (let x of rs) {
+                assert.ok(x.result !== null && x.code === 0 && x.killed === false, `child did not finish cleanly: code=${x.code}, killed=${x.killed}, out=${String(x.out).slice(-300)}`)
+                assert.strict.equal(x.result.err, null, `child failed: ${x.result.err}`)
+                assert.strict.equal(x.result.nFiles, members)
+            }
+            assert.strict.equal(new Set(rs.map((x) => x.result.pid)).size, N_CHILD, 'children must be distinct processes')
+        })
+
+        //R19(d): 事件為證(onTrace/onProgress): 並行取得下載者至多一個行程、同一檔不重複、發布至多一次、無等候逾時/鎖未生效/取得失敗/未結束之取得; 快取為空時下載全部分割恰一次, 已備妥時無下載
+        it(`should download at most once across the concurrent processes (judged from the events) `, function() {
+            let { downloads } = manifestChrome(readManifest())
+            let evs = rs.flatMap((x) => x.result.events)
+            let r = judgeTrace(evs)
+            assert.ok(r.mode !== 'none', 'no acquisition events were delivered by the public entry (onTrace not forwarded?)')
+            assert.ok(r.ok, `events do not show a single download: ${JSON.stringify(r.reasons)}`)
+            assert.ok(r.downloaders.length <= 1, `downloaded by ${r.downloaders.join(',')}`)
+            assert.ok(r.nDownload === 0 || r.nDownload === downloads, `download events ${r.nDownload}, expected 0 (cache ready) or ${downloads} (one process)`)
+            for (let x of rs) {
+                let mine = x.result.events.filter((e) => e.type === 'settle')
+                assert.ok(mine.length >= 1 && mine.every((e) => e.ok === true), `process ${x.result.pid}: acquisition did not settle ok`)
+            }
         })
 
     })
@@ -304,7 +454,7 @@ describe(`unit-chromeAcquire`, function() {
             })
         }
 
-        //R19(a): 取得集中, 他測試檔與工具不得直接呼叫ensureBins/fsEnsureBins
+        //R19(a): 取得集中, 他測試檔與工具不得直接呼叫ensureBins/fsEnsureBins(共用工具自身之限制見「cross-process single download」)
         it(`should not call ensureBins outside the shared tool `, function() {
             let files = []
             for (let n of names) {
