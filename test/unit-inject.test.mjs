@@ -3,6 +3,7 @@ import WHc2png from '../src/WHc2png.mjs'
 import { decodePng, pixelAt } from './tools/png.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
 import { isWindows } from './tools/child.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 //T-e: 物件opt之文字經JSON嵌入頁面時須逐字呈現(帳本R7, R8, 裁示D-10)
@@ -68,6 +69,11 @@ async function drawProbe(opt, probe) {
 
 
 describe(`unit-inject`, function() {
+
+    before(async function() {
+        //R19: 本檔未給whOpt.executablePath, 出圖時由w-html2png自行取得自帶chrome; 先經共用工具備妥快取(時限對齊下載預算CHROME_BUDGET_MS, 跨程序只下載一次), 各案不再於出圖時下載
+        await getChromeExe(this)
+    })
 
     after(async function() {
         await WHc2png.close()

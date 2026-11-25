@@ -3,7 +3,7 @@ import path from 'path'
 import assert from 'assert'
 import WHtml2png from 'w-html2png'
 import { isWindows } from './tools/child.mjs'
-import { getChromeExe } from './tools/chromeExe.mjs'
+import { getChromeInfo } from './tools/chromeExe.mjs'
 
 
 //帳本R17: 本套件(src、test、toolg與根目錄腳本)對w-html2png之匯入一律為公開入口'w-html2png', 不深層匯入其src或dist內檔
@@ -82,16 +82,26 @@ describe(`unit-publicEntry`, function() {
         assert.strict.equal(typeof WHtml2png.ensureBins, 'function')
     })
 
-    //R17: 經公開入口取得之chrome執行檔存在, 為套件自帶之帶版本者(非組根層啟動器); Windows限定
-    it(`should get the bundled chrome.exe through ensureBins `, async function() {
-        if (!isWindows()) {
-            this.skip()
-        }
-        let fp = await getChromeExe()
-        assert.ok(fs.existsSync(fp), fp)
-        assert.ok(/[\\/]portable[\\/]App[\\/]Chrome-bin[\\/][^\\/]+[\\/]chrome\.exe$/.test(fp), fp)
-        let bins = await WHtml2png.ensureBins()
-        assert.ok(path.resolve(fp).startsWith(path.resolve(bins.chrome) + path.sep), `${fp} is not inside ${bins.chrome}`)
+    describe(`bundled chrome`, function() {
+
+        let chrome = { exe: '', dir: '' }
+
+        before(async function() {
+            //R19: 取得集中於共用工具, 於before以ctx取得(時限對齊下載預算CHROME_BUDGET_MS), 不在it內取得; 非Windows不取得
+            chrome = await getChromeInfo(this)
+        })
+
+        //R17: 經公開入口取得之chrome執行檔存在, 為套件自帶之帶版本者(非組根層啟動器); Windows限定
+        it(`should get the bundled chrome.exe through ensureBins `, function() {
+            if (!isWindows()) {
+                this.skip()
+            }
+            let fp = chrome.exe
+            assert.ok(fs.existsSync(fp), fp)
+            assert.ok(/[\\/]portable[\\/]App[\\/]Chrome-bin[\\/][^\\/]+[\\/]chrome\.exe$/.test(fp), fp)
+            assert.ok(path.resolve(fp).startsWith(path.resolve(chrome.dir) + path.sep), `${fp} is not inside ${chrome.dir}`)
+        })
+
     })
 
 })

@@ -35,10 +35,8 @@ async function callWith(whOptBase) {
 describe(`unit-whOptTimeout`, function() {
 
     before(async function() {
-        //先取得自帶chrome(首次使用時下載, 計時不含此步驟), 使下列時限只量測出圖
-        if (isWindows()) {
-            await getChromeExe()
-        }
+        //先取得自帶chrome(首次使用時下載, 計時不含此步驟), 使下列時限只量測出圖; R19: 取得處之時限對齊下載預算(CHROME_BUDGET_MS), 非Windows不取得
+        await getChromeExe(this)
     })
 
     after(async function() {

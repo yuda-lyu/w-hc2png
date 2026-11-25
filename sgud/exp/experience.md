@@ -58,6 +58,17 @@
 - **取閱未安裝套件之內容**:`npm pack <名>@<版> --pack-destination ./tmp/…` 後以**相對路徑**解開(`tar -xzf ./tmp/…/x.tgz -C ./tmp/…`);Git Bash 的 `tar` 會把 `C:/…` 當成 `主機:路徑` 而失敗。
 - **變異副本的跑法**:把 `src/`、`test/tools/` 與待測的測試檔複製到 `test/_tmp/<案名>/<變異id>/`(gitignore),在副本內以字串替換套用單點變異,以 `node node_modules/mocha/bin/mocha.js --no-parallel <副本測試檔>` 在 repo 根為 cwd 執行;副本在 repo 內,模組解析往上找到 repo 之 `node_modules`,不需 junction。腳本須先跑一個不變異之對照組(確認副本本身全綠),否則「被擊殺」可能只是副本壞了。
 
+## 平行測試取得 Chrome:集中、時限、只下載一次(2026-11-25,主控排程第 632 項;帳本 R19)
+
+- **事故形狀**:依賴升版清空 `node_modules/w-html2png/bin-cache` 後 `mocha --parallel` 各檔各自取 Chrome(約 402 MB),互搶頻寬,hook/案之 180 秒不足而 7 案逾時;3 檔未給 `executablePath`,是出圖時**隱式**取得(只改 `chromeExe.mjs` 涵蓋不到),須各檔 `before` 先備妥。
+- **本機網路下載很快(單程序約 30 秒),真 180 秒逾時不易重現**:修前紅以縮小時限重現——清空快取後 `npx mocha --parallel "test/*.test.mjs" --timeout 60000`,舊測試 20 passing / 7 failing(4 處明給 + 3 處隱式),同指令修後 70 passing。修前後都要先清空快取;紅燈那輪結束後快取仍完整(下載行程未被殺),不必另清,但下一輪驗收前仍要清。
+- **升級本套件之 wsemi 不會讓 w-html2png 內部取得帶鎖**:w-html2png 1.0.94 之 `dist/w-html2png.umd.js` 內嵌打包舊版 `fsEnsureBins`(`lock-wait` 0 處);只升 wsemi 並集中取得時,實測清空快取後 6 個行程各下載 8 檔(48 次 `download` 事件、0 次 `lock-wait`),全套仍綠(下載夠快)——**全綠不證明只下載一次**,須看事件。對自有套件之依賴,先 Grep 其 `dist` 是否內嵌所需版本之功能,不要只看 `npm ls` 之去重結果。因此 `ensureChromeBins` 先以本套件之 wsemi(帶鎖)依 w-html2png 之清單 seed,再經公開入口取路徑。
+- **事件驗收**:`W_HC2PNG_CHROME_TRACE=<檔>` 令 `chromeExe.mjs` 把 `onTrace`/`onProgress` 事件逐列寫檔(含 pid),`test/tools/chromeTrace.mjs` 判讀。實測(清空快取、`npm test`):1 個 pid 下載 8 檔(各 1 次)、`publish placed` 1 次、5 個 pid 出現 `lock-wait start` 且皆 `end hit:true`。事件之 `onProgress` `wait` 帶 `pid`(持有者)會蓋掉本行程 pid,寫檔時另存為 `evPid`。
+- **`this.timeout(n)` 於執行中之 hook 會重設計時**(mocha `Runnable#timeout` 有計時器即 `resetTimeout`),故 `getChromeExe(this)` 不必放在 hook 第一行;但仍以呼叫處為準,hook 內其他步驟另受該時限。取得時限用 `ctx.timeout(CHROME_BUDGET_MS)` 覆寫該 hook,不放寬 `--timeout 180000`,其餘案不長。
+- **預算常數推導**:wsemi `lockBudget` = 下載次數 × `totalMs` + 解壓批數 × (`totalMs` + 5 秒) + min(`totalMs`, 60 秒);`totalMs` 已含 `maxAttempts` 重試,故不再相乘。chrome 組:1 個壓縮檔 8 分割、107 個成員路徑共 6157 字元(每批至多 6000 字元 ⇒ 2 批,另留 1 批餘裕)。
+- **接線測試**:站點全集不手列,自檔案系統掃 `test/*.test.mjs` 是否用 Chrome(`WHc2png(`、`WHc2pngServer(`、`fpChildDraw`、`fpChildDual`)並逐檔斷言於 `before` 內 `await getChromeExe(this)`;掃描器本身以正反例自測。漏傳 `this` 於所有平台皆拋錯(非 Windows 亦驗)。27 項變異(含接線、預算、seed 順序與失敗不續行、掃描器與判讀器)全擊殺。獨立複審另抓到:掃描器須先去註解(否則註解中之字樣使接線案誤過)、站點全集除呼叫外須含匯入出圖入口者、事件判讀須判 `lock-skip` 與取得中被終止之行程、測試自己不得清掉外部驗收設定之環境變數(存舊值、finally 還原)、取得放 hook 首句使該 hook 時限整段適用。
+- **清空快取之作法**:先 `lstat` 逐項確認 `bin-cache` 下無目錄連結再 `fs.rmSync`,刪後回驗不存在;腳本放 `./tmp/`。
+
 ## 驗證手法
 
 - **頁面實際載入哪一版 Highcharts**:以字串 opt `let opt = { title: { text: 'Highcharts.version=' + Highcharts.version }, series: [{ data: [1,3,2,4] }] }` 出圖,版本直接畫在標題。

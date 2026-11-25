@@ -88,9 +88,9 @@ describe(`api-WHc2pngServerSecurity`, function() {
     let exe = ''
 
     before(async function() {
+        exe = await getChromeExe(this) //R19: 取得置於hook首句, 使該hook之時限整段對齊下載預算(CHROME_BUDGET_MS), 先於任何出圖
         fs.rmSync(fdCase, { recursive: true, force: true })
         fs.mkdirSync(fdCase, { recursive: true })
-        exe = await getChromeExe()
     })
 
     after(async function() {

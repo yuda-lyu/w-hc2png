@@ -77,6 +77,10 @@ describe(`unit-dist`, function() {
     let hashRepoDistBefore = null
 
     before(async function() {
+        //exe, 明給w-html2png自帶chrome之執行檔(經共用工具取得), 涵蓋whOpt.executablePath之傳遞
+        //R19: 取得置於hook首句, 使該hook之時限整段對齊下載預算(CHROME_BUDGET_MS), 先於任何出圖
+        exe = await getChromeExe(this)
+
         fs.rmSync(fdCase, { recursive: true, force: true })
         fs.mkdirSync(fdCase, { recursive: true })
 
@@ -84,9 +88,6 @@ describe(`unit-dist`, function() {
         hashRepoDistBefore = fs.existsSync(fpRepoDist) ? crypto.createHash('sha256').update(fs.readFileSync(fpRepoDist)).digest('hex') : null
         makeBuildCopy(fdBuild)
         build = await runToolg(fdBuild, 'gDistRollup')
-
-        //exe, 明給w-html2png自帶chrome之執行檔(經公開入口ensureBins取得), 涵蓋whOpt.executablePath之傳遞
-        exe = await getChromeExe()
     })
 
     after(function() {

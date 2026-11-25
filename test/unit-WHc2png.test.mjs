@@ -1,6 +1,7 @@
 import fs from 'fs'
 import WHc2png from '../src/WHc2png.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 function isWindows() {
@@ -117,6 +118,11 @@ async function testb() {
 
 
 describe(`WHc2png`, function() {
+
+    before(async function() {
+        //R19: 本檔未給whOpt.executablePath, 出圖時由w-html2png自行取得自帶chrome; 先經共用工具備妥快取(時限對齊下載預算CHROME_BUDGET_MS, 跨程序只下載一次), 各案不再於出圖時下載
+        await getChromeExe(this)
+    })
 
     after(async function() {
         //關閉常駐瀏覽器, 使測試結束後Node行程可立即退出

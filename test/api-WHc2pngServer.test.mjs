@@ -2,6 +2,7 @@ import fs from 'fs'
 import assert from 'assert'
 import WHc2pngServer from '../src/WHc2pngServer.mjs'
 import { assertChartPng } from './tools/assertChart.mjs'
+import { getChromeExe } from './tools/chromeExe.mjs'
 
 
 function isWindows() {
@@ -80,6 +81,8 @@ describe(`WHc2pngServer`, function() {
     let server = null
 
     before(async function() {
+        //R19: 本檔未給whOpt.executablePath, 出圖時由w-html2png自行取得自帶chrome; 先經共用工具備妥快取(時限對齊下載預算CHROME_BUDGET_MS, 跨程序只下載一次), 各案不再於出圖時下載
+        await getChromeExe(this)
         if (isWindows()) {
             server = await WHc2pngServer({ port, apiName })
         }

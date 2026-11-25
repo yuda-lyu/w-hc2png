@@ -42,6 +42,9 @@ describe(`unit-hcResolve`, function() {
     let ref = null
 
     before(async function() {
+        //R19: 取得置於hook首句, 使該hook之時限整段對齊下載預算(CHROME_BUDGET_MS), 先於任何出圖
+        exe = await getChromeExe(this)
+
         fs.rmSync(fdCase, { recursive: true, force: true })
         fs.mkdirSync(fdEmpty, { recursive: true })
 
@@ -57,8 +60,6 @@ describe(`unit-hcResolve`, function() {
         makeBuildCopy(fdBuild)
         let b = await runToolg(fdBuild, 'gDistRollup')
         assert.strict.equal(b.code, 0, b.out.slice(-800))
-
-        exe = await getChromeExe()
     })
 
     after(function() {
