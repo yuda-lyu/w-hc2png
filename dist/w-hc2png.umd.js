@@ -1,5 +1,5 @@
 /*!
- * w-hc2png v1.1.50
+ * w-hc2png v1.1.51
  * (c) 2018-2021 yuda-lyu(semisphere)
  * Released under the MIT License.
  */
